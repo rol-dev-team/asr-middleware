@@ -134,6 +134,16 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Media files
+*.mp4
+*.mp3
+*.wav
+*.flac
+
+# DB files
+*.sqlite3
+*.db
+
 # Environments
 .env
 .envrc
