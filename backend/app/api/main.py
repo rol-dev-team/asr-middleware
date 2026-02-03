@@ -25,5 +25,5 @@ async def greet():
     return {"message": "Hello World!"}
 
 
-app.include_router(audios.router, prefix="/api/v1", tags=["audios"])
-app.include_router(translations.router, prefix="/api/v1", tags=["translations"])
+app.include_router(audios.router, prefix="/api/v1/audios", tags=["audios"])
+app.include_router(translations.router, prefix="/api/v1/translations", tags=["translations"])

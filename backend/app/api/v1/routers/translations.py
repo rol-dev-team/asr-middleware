@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.api.db import get_session
@@ -6,7 +6,9 @@ from app.api.models import (
     AudioTranscription, 
     AudioTranslation,
     AudioTranslationCreate,
-    AudioTranslationPublic
+    AudioTranslationPublic,
+    MeetingAnalysis,
+    MeetingAnalysisPublic
 )
 from google import genai
 import os
@@ -25,7 +27,7 @@ MEDIA_DIR = Path(__file__).parent.parent.parent.parent.parent / "media"
 MEDIA_DIR.mkdir(exist_ok=True)
 
 
-@router.post("/translations", response_model=AudioTranslationPublic)
+@router.post("/", response_model=AudioTranslationPublic)
 async def translate_banglish_to_english(
     translation_data: AudioTranslationCreate,
     session: AsyncSession = Depends(get_session)
@@ -107,7 +109,7 @@ After the translation, on a new line, also provide your confidence score (0.0 to
     return translation
 
 
-@router.get("/translations", response_model=List[AudioTranslationPublic])
+@router.get("/", response_model=List[AudioTranslationPublic])
 async def get_all_translations(
     session: AsyncSession = Depends(get_session),
     skip: int = 0,
@@ -123,7 +125,7 @@ async def get_all_translations(
     return translations
 
 
-@router.get("/translations/{translation_id}", response_model=AudioTranslationPublic)
+@router.get("/{translation_id}", response_model=AudioTranslationPublic)
 async def get_translation_by_id(
     translation_id: uuid.UUID,
     session: AsyncSession = Depends(get_session)
@@ -139,3 +141,27 @@ async def get_translation_by_id(
         raise HTTPException(status_code=404, detail="Translation not found")
     
     return translation
+
+
+@router.get("/{translation_id}/analyses", response_model=List[MeetingAnalysisPublic])
+async def get_analyses_by_translation_id(
+    translation_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Retrieve all analyses for a specific audio translation.
+    """
+    # First verify the translation exists
+    translation_statement = select(AudioTranslation).where(AudioTranslation.id == translation_id)
+    translation_result = await session.execute(translation_statement)
+    translation = translation_result.scalar_one_or_none()
+    
+    if not translation:
+        raise HTTPException(status_code=404, detail="Audio translation not found")
+    
+    # Get all analyses for this translation
+    statement = select(MeetingAnalysis).where(MeetingAnalysis.audio_translation_id == translation_id).order_by(MeetingAnalysis.created_at.desc())
+    result = await session.execute(statement)
+    analyses = result.scalars().all()
+    
+    return analyses
