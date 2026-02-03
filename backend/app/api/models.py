@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field
 from pydantic import EmailStr
 import uuid
 from datetime import datetime
@@ -91,5 +91,43 @@ class AudioTranslationPublic(SQLModel):
     source_text: str
     translated_text: str
     confidence_score: Optional[float]
+    model_used: str
+    created_at: datetime
+
+
+class MeetingAnalysis(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    audio_translation_id: uuid.UUID = Field(foreign_key="audiotranslation.id")
+    content_text: str  # The text that was analyzed (from translation)
+    
+    # Analysis components
+    summary: str  # Brief summary of the meeting/content
+    business_insights: str  # Business-focused analysis
+    technical_insights: str  # Technical analysis
+    action_items: Optional[str] = None  # Extracted action items
+    key_topics: Optional[str] = None  # Main topics discussed
+    
+    # Optional markdown notes
+    notes_markdown: Optional[str] = None  # Full formatted notes in markdown
+    
+    model_used: str = Field(default="gemini-2.5-flash", max_length=100)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class MeetingAnalysisCreate(SQLModel):
+    audio_translation_id: uuid.UUID
+    generate_markdown: bool = False  # Whether to generate MD notes
+
+
+class MeetingAnalysisPublic(SQLModel):
+    id: uuid.UUID
+    audio_translation_id: uuid.UUID
+    content_text: str
+    summary: str
+    business_insights: str
+    technical_insights: str
+    action_items: Optional[str]
+    key_topics: Optional[str]
+    notes_markdown: Optional[str]
     model_used: str
     created_at: datetime
