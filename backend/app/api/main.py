@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.v1.routers import audios
+from app.api.v1.routers import audios, translations
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -26,3 +26,4 @@ async def greet():
 
 
 app.include_router(audios.router, prefix="/api/v1", tags=["audios"])
+app.include_router(translations.router, prefix="/api/v1", tags=["translations"])
