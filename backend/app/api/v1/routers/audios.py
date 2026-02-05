@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.api.db import get_session
+from datetime import datetime
 from app.api.models import (
     AudioTranscription,
     AudioTranscriptionPublic,
@@ -192,8 +193,10 @@ KEY_TOPICS:
         notes_markdown = None
         if analysis_data.generate_markdown:
             print("Generating markdown notes...")
+            current_date = datetime.utcnow().strftime("%B %d, %Y")
             markdown_prompt = f"""Convert the following meeting analysis into a professional markdown document.
 
+Meeting Date: {current_date}
 Meeting Content: {content_text}
 
 Analysis:
@@ -204,7 +207,7 @@ Analysis:
 - Key Topics: {key_topics}
 
 Create a well-formatted markdown document with proper headings, bullet points, and sections.
-Include a title, date placeholder, and organize information clearly."""
+Use the provided date ({current_date}) in your document and organize information clearly."""
             
             markdown_response = client.models.generate_content(
                 model="gemini-2.5-flash",
