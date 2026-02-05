@@ -69,6 +69,7 @@ async def transcribe_audio(
                 "You are an expert transcriber. The audio contains a mix of Bangla and English. "
                 "Transcribe the audio exactly as spoken but use the Roman alphabet (Banglish). "
                 "Example: 'Amra ajke meeting korsi'. Please transcribe this audio into Banglish text."
+                "Identify the different speakers and label them as 'Speaker 1', 'Speaker 2', etc. Include timestamps for whenever the speaker changes."
             ]
         )
         
