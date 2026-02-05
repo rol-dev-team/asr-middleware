@@ -116,7 +116,7 @@ class MeetingAnalysis(SQLModel, table=True):
 
 class MeetingAnalysisCreate(SQLModel):
     audio_translation_id: uuid.UUID
-    generate_markdown: bool = False  # Whether to generate MD notes
+    generate_markdown: bool = True  # Whether to generate MD notes
 
 
 class MeetingAnalysisPublic(SQLModel):
