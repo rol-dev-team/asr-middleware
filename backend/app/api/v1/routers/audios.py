@@ -111,48 +111,6 @@ async def get_all_audios(
     return audios
 
 
-@router.get("/{audio_id}", response_model=AudioTranscriptionPublic)
-async def get_audio_by_id(
-    audio_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session)
-):
-    """
-    Retrieve a specific audio transcription record by its ID.
-    """
-    statement = select(AudioTranscription).where(AudioTranscription.id == audio_id)
-    result = await session.execute(statement)
-    audio = result.scalar_one_or_none()
-    
-    if not audio:
-        raise HTTPException(status_code=404, detail="Audio transcription not found")
-    
-    return audio
-
-
-@router.get("/{audio_id}/translations", response_model=List[AudioTranslationPublic])
-async def get_translations_by_audio_id(
-    audio_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session)
-):
-    """
-    Retrieve all translations for a specific audio transcription.
-    """
-    # First verify the audio transcription exists
-    audio_statement = select(AudioTranscription).where(AudioTranscription.id == audio_id)
-    audio_result = await session.execute(audio_statement)
-    audio = audio_result.scalar_one_or_none()
-    
-    if not audio:
-        raise HTTPException(status_code=404, detail="Audio transcription not found")
-    
-    # Get all translations for this audio
-    statement = select(AudioTranslation).where(AudioTranslation.audio_transcription_id == audio_id).order_by(AudioTranslation.created_at.desc())
-    result = await session.execute(statement)
-    translations = result.scalars().all()
-    
-    return translations
-
-
 @router.post("/analyses", response_model=MeetingAnalysisPublic)
 async def create_meeting_analysis(
     analysis_data: MeetingAnalysisCreate,
@@ -309,3 +267,46 @@ async def get_analysis_by_id(
         raise HTTPException(status_code=404, detail="Meeting analysis not found")
     
     return analysis
+
+
+@router.get("/{audio_id}", response_model=AudioTranscriptionPublic)
+async def get_audio_by_id(
+    audio_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Retrieve a specific audio transcription record by its ID.
+    """
+    statement = select(AudioTranscription).where(AudioTranscription.id == audio_id)
+    result = await session.execute(statement)
+    audio = result.scalar_one_or_none()
+    
+    if not audio:
+        raise HTTPException(status_code=404, detail="Audio transcription not found")
+    
+    return audio
+
+
+@router.get("/{audio_id}/translations", response_model=List[AudioTranslationPublic])
+async def get_translations_by_audio_id(
+    audio_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Retrieve all translations for a specific audio transcription.
+    """
+    # First verify the audio transcription exists
+    audio_statement = select(AudioTranscription).where(AudioTranscription.id == audio_id)
+    audio_result = await session.execute(audio_statement)
+    audio = audio_result.scalar_one_or_none()
+    
+    if not audio:
+        raise HTTPException(status_code=404, detail="Audio transcription not found")
+    
+    # Get all translations for this audio
+    statement = select(AudioTranslation).where(AudioTranslation.audio_transcription_id == audio_id).order_by(AudioTranslation.created_at.desc())
+    result = await session.execute(statement)
+    translations = result.scalars().all()
+    
+    return translations
+
