@@ -91,7 +91,8 @@ async def transcribe_audio(
         original_filename=file.filename,
         file_size=file_size,
         mime_type=file.content_type,
-        transcription_text=transcription_text
+        transcription_text=transcription_text,
+        user_id=current_user.id
     )
     
     session.add(audio_transcription)
@@ -112,9 +113,9 @@ async def get_all_audios(
     Retrieve all audio transcription records from the database.
     Supports pagination with skip and limit parameters.
     """
-    statement = select(AudioTranscription).offset(skip).limit(limit).order_by(AudioTranscription.created_at.desc())
-    result = await session.execute(statement)
-    audios = result.scalars().all()
+    statement = select(AudioTranscription).where(AudioTranscription.user_id == current_user.id).offset(skip).limit(limit).order_by(AudioTranscription.created_at.desc())
+    result = await session.exec(statement)
+    audios = result.all()
     return audios
 
 
@@ -129,14 +130,14 @@ async def create_meeting_analysis(
     Similar to Fireflies.ai analysis - extracts insights, action items, and can generate markdown notes.
     """
     # Verify the audio translation exists
-    statement = select(AudioTranslation).where(AudioTranslation.id == analysis_data.audio_translation_id)
-    result = await session.execute(statement)
-    translation = result.scalar_one_or_none()
+    statement = select(AudioTranslation).where(AudioTranslation.user_id == current_user.id, AudioTranslation.id == analysis_data.audio_translation_id)
+    result = await session.exec(statement)
+    translation = result.all()
     
     if not translation:
         raise HTTPException(status_code=404, detail="Audio translation not found")
     
-    content_text = translation.translated_text
+    content_text = translation[0].translated_text
     
     if not content_text:
         raise HTTPException(status_code=400, detail="No translated text available to analyze")
@@ -230,6 +231,7 @@ Use the provided date ({current_date}) in your document and organize information
         audio_translation_id=analysis_data.audio_translation_id,
         content_text=content_text,
         summary=summary,
+        user_id=current_user.id,
         business_insights=business_insights,
         technical_insights=technical_insights,
         action_items=action_items if action_items != "Not available" else None,
@@ -256,9 +258,10 @@ async def get_all_analyses(
     Retrieve all meeting analysis records from the database.
     Supports pagination with skip and limit parameters.
     """
-    statement = select(MeetingAnalysis).offset(skip).limit(limit).order_by(MeetingAnalysis.created_at.desc())
-    result = await session.execute(statement)
-    analyses = result.scalars().all()
+    
+    statement = select(MeetingAnalysis).where(MeetingAnalysis.user_id == current_user.id).offset(skip).limit(limit).order_by(MeetingAnalysis.created_at.desc())
+    result = await session.exec(statement)
+    analyses = result.all()
     return analyses
 
 
@@ -271,14 +274,13 @@ async def get_analysis_by_id(
     """
     Retrieve a specific meeting analysis by its ID.
     """
-    statement = select(MeetingAnalysis).where(MeetingAnalysis.id == analysis_id)
-    result = await session.execute(statement)
-    analysis = result.scalar_one_or_none()
+    statement = select(MeetingAnalysis).where(MeetingAnalysis.user_id == current_user.id, MeetingAnalysis.id == analysis_id)
+    result = await session.exec(statement)
+    analysis = result.all()
     
     if not analysis:
         raise HTTPException(status_code=404, detail="Meeting analysis not found")
-    
-    return analysis
+    return analysis[0]
 
 
 @router.get("/{audio_id}", response_model=AudioTranscriptionPublic)
@@ -290,14 +292,14 @@ async def get_audio_by_id(
     """
     Retrieve a specific audio transcription record by its ID.
     """
-    statement = select(AudioTranscription).where(AudioTranscription.id == audio_id)
-    result = await session.execute(statement)
-    audio = result.scalar_one_or_none()
+    statement = select(AudioTranscription).where(AudioTranscription.user_id == current_user.id, AudioTranscription.id == audio_id)
+    result = await session.exec(statement)
+    audio = result.all()
     
     if not audio:
         raise HTTPException(status_code=404, detail="Audio transcription not found")
     
-    return audio
+    return audio[0]
 
 
 @router.get("/{audio_id}/translations", response_model=List[AudioTranslationPublic])
@@ -310,17 +312,17 @@ async def get_translations_by_audio_id(
     Retrieve all translations for a specific audio transcription.
     """
     # First verify the audio transcription exists
-    audio_statement = select(AudioTranscription).where(AudioTranscription.id == audio_id)
-    audio_result = await session.execute(audio_statement)
-    audio = audio_result.scalar_one_or_none()
+    audio_statement = select(AudioTranscription).where(AudioTranscription.user_id == current_user.id, AudioTranscription.id == audio_id)
+    audio_result = await session.exec(audio_statement)
+    audio = audio_result.all()
     
     if not audio:
         raise HTTPException(status_code=404, detail="Audio transcription not found")
     
     # Get all translations for this audio
-    statement = select(AudioTranslation).where(AudioTranslation.audio_transcription_id == audio_id).order_by(AudioTranslation.created_at.desc())
-    result = await session.execute(statement)
-    translations = result.scalars().all()
+    statement = select(AudioTranslation).where(AudioTranslation.user_id == current_user.id, AudioTranslation.audio_transcription_id == audio_id).order_by(AudioTranslation.created_at.desc())
+    result = await session.exec(statement)
+    translations = result.all()
     
     return translations
 
