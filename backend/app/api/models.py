@@ -8,10 +8,13 @@ from typing import Optional
 class UserBase(SQLModel):
     username: str = Field(default=None, index=True, max_length=50)
     email: EmailStr = Field(default=None, index=True, max_length=100)
+    full_name: str | None = Field(default=None, max_length=255)
 
 
 class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    is_active: bool = Field(default=False)
+    is_superuser: bool = Field(default=False)
     hashed_password: str = Field(default=None, max_length=256)
 
 

@@ -2,6 +2,9 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.api.db import get_session
+from app.api.v1.deps import get_current_active_user
+from app.api.models import User
+from typing import Annotated
 from datetime import datetime
 from app.api.models import (
     AudioTranscription,
@@ -30,6 +33,7 @@ MEDIA_DIR.mkdir(exist_ok=True)
 
 @router.post("/transcribe", response_model=AudioTranscriptionPublic)
 async def transcribe_audio(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session)
 ):
@@ -99,6 +103,7 @@ async def transcribe_audio(
 
 @router.get("/", response_model=List[AudioTranscriptionPublic])
 async def get_all_audios(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     session: AsyncSession = Depends(get_session),
     skip: int = 0,
     limit: int = 100
@@ -115,6 +120,7 @@ async def get_all_audios(
 
 @router.post("/analyses", response_model=MeetingAnalysisPublic)
 async def create_meeting_analysis(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     analysis_data: MeetingAnalysisCreate,
     session: AsyncSession = Depends(get_session)
 ):
@@ -241,6 +247,7 @@ Use the provided date ({current_date}) in your document and organize information
 
 @router.get("/analyses", response_model=List[MeetingAnalysisPublic])
 async def get_all_analyses(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     session: AsyncSession = Depends(get_session),
     skip: int = 0,
     limit: int = 100
@@ -257,6 +264,7 @@ async def get_all_analyses(
 
 @router.get("/analyses/{analysis_id}", response_model=MeetingAnalysisPublic)
 async def get_analysis_by_id(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     analysis_id: uuid.UUID,
     session: AsyncSession = Depends(get_session)
 ):
@@ -275,6 +283,7 @@ async def get_analysis_by_id(
 
 @router.get("/{audio_id}", response_model=AudioTranscriptionPublic)
 async def get_audio_by_id(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     audio_id: uuid.UUID,
     session: AsyncSession = Depends(get_session)
 ):
@@ -293,6 +302,7 @@ async def get_audio_by_id(
 
 @router.get("/{audio_id}/translations", response_model=List[AudioTranslationPublic])
 async def get_translations_by_audio_id(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     audio_id: uuid.UUID,
     session: AsyncSession = Depends(get_session)
 ):

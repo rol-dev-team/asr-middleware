@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.api.db import get_session
+from app.api.v1.deps import get_current_active_user
+from app.api.models import User
+from typing import Annotated
 from app.api.models import (
     AudioTranscription, 
     AudioTranslation,
@@ -29,6 +32,7 @@ MEDIA_DIR.mkdir(exist_ok=True)
 
 @router.post("/", response_model=AudioTranslationPublic)
 async def translate_banglish_to_english(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     translation_data: AudioTranslationCreate,
     session: AsyncSession = Depends(get_session)
 ):
@@ -111,6 +115,7 @@ After the translation, on a new line, also provide your confidence score (0.0 to
 
 @router.get("/", response_model=List[AudioTranslationPublic])
 async def get_all_translations(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     session: AsyncSession = Depends(get_session),
     skip: int = 0,
     limit: int = 100
@@ -127,6 +132,7 @@ async def get_all_translations(
 
 @router.get("/{translation_id}", response_model=AudioTranslationPublic)
 async def get_translation_by_id(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     translation_id: uuid.UUID,
     session: AsyncSession = Depends(get_session)
 ):
@@ -145,6 +151,7 @@ async def get_translation_by_id(
 
 @router.get("/{translation_id}/analyses", response_model=List[MeetingAnalysisPublic])
 async def get_analyses_by_translation_id(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     translation_id: uuid.UUID,
     session: AsyncSession = Depends(get_session)
 ):
