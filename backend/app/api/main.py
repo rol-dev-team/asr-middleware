@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-
-from app.api.v1.routers import audios, translations
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.v1.routers import audios, translations, auth
 
 
 app = FastAPI(
@@ -20,10 +20,11 @@ app.add_middleware(
 )
 
 
-@app.get("/greet")
-async def greet():
-    return {"message": "Hello World!"}
+@app.get("/health", tags=["health"])
+async def health_check():
+    return {"status": "ok", "message": "ASR Middleware is running."}
 
 
 app.include_router(audios.router, prefix="/api/v1/audios", tags=["audios"])
 app.include_router(translations.router, prefix="/api/v1/translations", tags=["translations"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])

@@ -8,10 +8,13 @@ from typing import Optional
 class UserBase(SQLModel):
     username: str = Field(default=None, index=True, max_length=50)
     email: EmailStr = Field(default=None, index=True, max_length=100)
+    full_name: str | None = Field(default=None, max_length=255)
 
 
 class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    is_active: bool = Field(default=False)
+    is_superuser: bool = Field(default=False)
     hashed_password: str = Field(default=None, max_length=256)
 
 
@@ -77,6 +80,7 @@ class AudioTranslation(SQLModel, table=True):
     translated_text: str  # Pure English text
     confidence_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     model_used: str = Field(default="gemini-2.5-flash", max_length=100)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -99,6 +103,7 @@ class MeetingAnalysis(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
     audio_translation_id: uuid.UUID = Field(foreign_key="audiotranslation.id")
     content_text: str  # The text that was analyzed (from translation)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="user.id")
     
     # Analysis components
     summary: str  # Brief summary of the meeting/content

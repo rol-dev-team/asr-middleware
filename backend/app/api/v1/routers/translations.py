@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.api.db import get_session
+from app.api.v1.deps import get_current_active_user
+from app.api.models import User
+from typing import Annotated
 from app.api.models import (
     AudioTranscription, 
     AudioTranslation,
@@ -29,6 +32,7 @@ MEDIA_DIR.mkdir(exist_ok=True)
 
 @router.post("/", response_model=AudioTranslationPublic)
 async def translate_banglish_to_english(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     translation_data: AudioTranslationCreate,
     session: AsyncSession = Depends(get_session)
 ):
@@ -39,14 +43,14 @@ async def translate_banglish_to_english(
     """
     # First verify the audio transcription exists
     statement = select(AudioTranscription).where(AudioTranscription.id == translation_data.audio_transcription_id)
-    result = await session.execute(statement)
-    audio = result.scalar_one_or_none()
+    result = await session.exec(statement)
+    audio = result.all()
     
     if not audio:
         raise HTTPException(status_code=404, detail="Audio transcription not found")
     
     # Use the source_text from the request or fall back to the audio's transcription_text
-    source_text = translation_data.source_text or audio.transcription_text
+    source_text = translation_data.source_text or audio[0].transcription_text
     
     if not source_text:
         raise HTTPException(status_code=400, detail="No text available to translate")
@@ -99,6 +103,7 @@ After the translation, on a new line, also provide your confidence score (0.0 to
         source_text=source_text,
         translated_text=translated_text,
         confidence_score=confidence_score,
+        user_id=current_user.id,
         model_used="gemini-2.5-flash"
     )
     
@@ -111,6 +116,7 @@ After the translation, on a new line, also provide your confidence score (0.0 to
 
 @router.get("/", response_model=List[AudioTranslationPublic])
 async def get_all_translations(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     session: AsyncSession = Depends(get_session),
     skip: int = 0,
     limit: int = 100
@@ -119,23 +125,24 @@ async def get_all_translations(
     Retrieve all translation records from the database.
     Supports pagination with skip and limit parameters.
     """
-    statement = select(AudioTranslation).offset(skip).limit(limit).order_by(AudioTranslation.created_at.desc())
-    result = await session.execute(statement)
-    translations = result.scalars().all()
+    statement = select(AudioTranslation).where(AudioTranslation.user_id == current_user.id).offset(skip).limit(limit).order_by(AudioTranslation.created_at.desc())
+    result = await session.exec(statement)
+    translations = result.all()
     return translations
 
 
 @router.get("/{translation_id}", response_model=AudioTranslationPublic)
 async def get_translation_by_id(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     translation_id: uuid.UUID,
     session: AsyncSession = Depends(get_session)
 ):
     """
     Retrieve a specific translation record by its ID.
     """
-    statement = select(AudioTranslation).where(AudioTranslation.id == translation_id)
-    result = await session.execute(statement)
-    translation = result.scalar_one_or_none()
+    statement = select(AudioTranslation).where(AudioTranslation.user_id == current_user.id, AudioTranslation.id == translation_id)
+    result = await session.exec(statement)
+    translation = result.all()
     
     if not translation:
         raise HTTPException(status_code=404, detail="Translation not found")
@@ -145,6 +152,7 @@ async def get_translation_by_id(
 
 @router.get("/{translation_id}/analyses", response_model=List[MeetingAnalysisPublic])
 async def get_analyses_by_translation_id(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     translation_id: uuid.UUID,
     session: AsyncSession = Depends(get_session)
 ):
@@ -152,16 +160,16 @@ async def get_analyses_by_translation_id(
     Retrieve all analyses for a specific audio translation.
     """
     # First verify the translation exists
-    translation_statement = select(AudioTranslation).where(AudioTranslation.id == translation_id)
-    translation_result = await session.execute(translation_statement)
-    translation = translation_result.scalar_one_or_none()
+    translation_statement = select(AudioTranslation).where(AudioTranslation.user_id == current_user.id, AudioTranslation.id == translation_id)
+    translation_result = await session.exec(translation_statement)
+    translation = translation_result.all()
     
     if not translation:
         raise HTTPException(status_code=404, detail="Audio translation not found")
     
     # Get all analyses for this translation
-    statement = select(MeetingAnalysis).where(MeetingAnalysis.audio_translation_id == translation_id).order_by(MeetingAnalysis.created_at.desc())
-    result = await session.execute(statement)
-    analyses = result.scalars().all()
+    statement = select(MeetingAnalysis).where(MeetingAnalysis.user_id == current_user.id, MeetingAnalysis.audio_translation_id == translation_id).order_by(MeetingAnalysis.created_at.desc())
+    result = await session.exec(statement)
+    analyses = result.all()
     
     return analyses
