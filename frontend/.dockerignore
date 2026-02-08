@@ -51,7 +51,7 @@ docs/
 Dockerfile
 docker-compose*.yml
 .dockerignore
-nginx.conf
+# nginx.conf
 
 # Misc
 .cache/
