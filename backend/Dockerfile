@@ -19,8 +19,8 @@ RUN apt-get update && apt-get install -y \
 # Copy dependency files
 COPY pyproject.toml ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --user -e .
+# Install Python dependencies globally
+RUN pip install --no-cache-dir -e .
 
 # Runtime stage
 FROM python:3.13-slim
@@ -30,8 +30,7 @@ WORKDIR /app
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PATH=/root/.local/bin:$PATH
+    PYTHONDONTWRITEBYTECODE=1
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y \
@@ -39,8 +38,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd -r -g appuser appuser
 
-# Copy Python dependencies from builder
-COPY --from=builder /root/.local /root/.local
+# Copy Python dependencies from builder (system-wide installation)
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app /app
 
 # Copy application code
@@ -48,8 +48,9 @@ COPY app ./app
 COPY alembic.ini ./
 COPY main.py ./
 
-# Create media directory for file storage
-RUN mkdir -p /app/media && chown -R appuser:appuser /app
+# Create media directory for file storage and fix permissions
+RUN mkdir -p /app/media && \
+    chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
