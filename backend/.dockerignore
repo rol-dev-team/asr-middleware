@@ -1,3 +1,15 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+
 # Python
 __pycache__/
 *.py[cod]
@@ -9,6 +21,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+*.egg-info/
+dist/
+build/
+*.egg
 
 # Testing
 .pytest_cache/
@@ -16,18 +32,15 @@ venv.bak/
 htmlcov/
 *.cover
 .hypothesis/
+.tox/
+.nox/
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
 
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Media files
+# Media files (mount as volume instead)
 media/
 
 # IDE
@@ -36,17 +49,31 @@ media/
 *.swp
 *.swo
 *~
-
-# Git
-.git/
-.gitignore
+.DS_Store
 
 # Documentation
-README.md
+*.md
+!README.md
 LICENSE
+docs/
 
 # Logs
 *.log
+logs/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Nginx config
+nginx/
+
+# Misc
+.cache/
+tmp/
+temp/
+
 
 # OS
 .DS_Store

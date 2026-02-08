@@ -1,0 +1,39 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Docker volumes
+postgres_data/
+
+# Backups
+*.sql
+*.sql.gz
+backup_*
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SSL certificates (keep private)
+*.pem
+*.key
+*.crt
+*.cert
+
+# Temporary files
+tmp/
+temp/
+*.tmp

@@ -1,0 +1,4 @@
+# Place your SSL certificates here
+# - cert.pem (SSL certificate)
+# - key.pem (Private key)
+# - chain.pem (Certificate chain, if applicable)
