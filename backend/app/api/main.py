@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routers import audios, translations, auth
+from app.api.v1.internal import admin
 
 
 app = FastAPI(
@@ -28,3 +29,4 @@ async def health_check():
 app.include_router(audios.router, prefix="/api/v1/audios", tags=["audios"])
 app.include_router(translations.router, prefix="/api/v1/translations", tags=["translations"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(admin.router, prefix="/api/v1", tags=["admin"])

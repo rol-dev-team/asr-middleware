@@ -136,3 +136,7 @@ class MeetingAnalysisPublic(SQLModel):
     notes_markdown: Optional[str]
     model_used: str
     created_at: datetime
+
+
+class UserStatusUpdate(SQLModel):
+    is_active: bool
