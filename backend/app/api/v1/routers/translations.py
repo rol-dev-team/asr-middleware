@@ -20,7 +20,10 @@ from pathlib import Path
 from typing import List
 import re
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/translations",
+    tags=["translations"]
+)
 
 # Configure the Google Generative AI client
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))

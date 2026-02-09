@@ -26,7 +26,7 @@ async def health_check():
     return {"status": "ok", "message": "ASR Middleware is running."}
 
 
-app.include_router(audios.router, prefix="/api/v1/audios", tags=["audios"])
-app.include_router(translations.router, prefix="/api/v1/translations", tags=["translations"])
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
+app.include_router(audios.router, prefix="/api/v1")
+app.include_router(translations.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")

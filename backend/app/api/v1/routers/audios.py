@@ -22,7 +22,10 @@ import uuid
 from pathlib import Path
 from typing import List
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/audios",
+    tags=["audios"]
+)
 
 # Configure the Google Generative AI client
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
