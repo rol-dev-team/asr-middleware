@@ -38,6 +38,7 @@ MEDIA_DIR.mkdir(exist_ok=True)
 async def transcribe_audio(
     current_user: Annotated[User, Depends(get_current_active_user)],
     file: UploadFile = File(...),
+    title: str = "Untitled",
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -48,10 +49,20 @@ async def transcribe_audio(
     if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=400, detail="File must be an audio file")
     
-    # Generate unique filename
+    # Generate filename with Title_Client_Timestamp format
     file_extension = Path(file.filename).suffix
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = MEDIA_DIR / unique_filename
+    client_uuid = str(current_user.id)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    clean_title = title.replace(" ", "_").replace("/", "_").replace("\\", "_")
+
+    ## Should be replaced with the meeting client uuid not with the user uuid who initiated the upload
+    unique_filename = f"{clean_title}_{client_uuid}_{timestamp}{file_extension}"
+    
+    # Create client-specific directory
+    client_dir = MEDIA_DIR / client_uuid
+    client_dir.mkdir(exist_ok=True)
+    
+    file_path = client_dir / unique_filename
     
     # Save the uploaded file
     try:
