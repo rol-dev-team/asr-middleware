@@ -7,7 +7,10 @@ from app.api.v1.deps import decode_token, get_current_active_user, hash_password
 from app.api.db import get_session
 from typing import Annotated
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/auth",
+    tags=["auth"]
+)
 
 
 @router.post("/register", response_model=UserBase, status_code=status.HTTP_201_CREATED)
