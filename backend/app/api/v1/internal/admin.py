@@ -4,7 +4,7 @@ from typing import Annotated
 import uuid
 
 from app.api.db import get_session
-from app.api.models import User, UserPublic, UserStatusUpdate
+from app.api.models import User, UserAdminDisplay, UserStatusUpdate
 from app.api.v1.deps import get_current_superuser
 
 router = APIRouter(
@@ -14,7 +14,7 @@ router = APIRouter(
 )
 
 
-@router.patch("/users/{user_id}/status", response_model=UserPublic)
+@router.patch("/users/{user_id}/status", response_model=UserAdminDisplay)
 async def update_user_status(
     user_id: uuid.UUID,
     status_update: UserStatusUpdate,
@@ -51,7 +51,7 @@ async def update_user_status(
     return user
 
 
-@router.get("/users", response_model=list[UserPublic])
+@router.get("/users", response_model=list[UserAdminDisplay])
 async def list_all_users(
     session: Annotated[Session, Depends(get_session)],
     current_admin: Annotated[User, Depends(get_current_superuser)],

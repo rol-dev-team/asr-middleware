@@ -18,6 +18,12 @@ class User(UserBase, table=True):
     hashed_password: str = Field(default=None, max_length=256)
 
 
+class UserAdminDisplay(UserBase):
+    id: uuid.UUID
+    is_active: bool
+    is_superuser: bool
+
+
 class UserPublic(UserBase):
     id: uuid.UUID
 
