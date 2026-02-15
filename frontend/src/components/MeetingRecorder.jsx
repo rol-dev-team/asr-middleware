@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { audioApi } from '../services/api';
 
 function MeetingRecorder({ meeting, onBack }) {
   const [isRecording, setIsRecording] = useState(false);
@@ -6,10 +7,13 @@ function MeetingRecorder({ meeting, onBack }) {
   const [recordingTime, setRecordingTime] = useState(0);
   const [error, setError] = useState(null);
   const [audioURL, setAudioURL] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
+  const audioBlobRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -38,21 +42,34 @@ function MeetingRecorder({ meeting, onBack }) {
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
+          console.log('Chunk received:', event.data.size, 'bytes');
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = async () => {
+        console.log('Recording stopped, chunks:', audioChunksRef.current.length);
+        
+        if (audioChunksRef.current.length === 0) {
+          setError('Recording failed: No audio data captured');
+          return;
+        }
+        
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log('Blob created:', audioBlob.size, 'bytes');
+        
+        if (audioBlob.size === 0) {
+          setError('Recording failed: Audio file is empty');
+          return;
+        }
+        
+        audioBlobRef.current = audioBlob;
         
         // Convert to MP3 (Note: Direct MP3 encoding requires a library like lamejs)
         // For now, we'll save as the recorded format and label it appropriately
         const url = URL.createObjectURL(audioBlob);
         setAudioURL(url);
-        
-        // Download the file
-        downloadAudio(audioBlob, meeting.title);
         
         // Stop all tracks to release the microphone
         stream.getTracks().forEach(track => track.stop());
@@ -89,24 +106,74 @@ function MeetingRecorder({ meeting, onBack }) {
 
   const endMeeting = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      const recorder = mediaRecorderRef.current;
+      
+      // Request final data before stopping
+      if (recorder.state === 'recording') {
+        recorder.requestData();
+      }
+      
+      setTimeout(() => {
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+      }, 100);
+      
       setIsRecording(false);
       clearInterval(timerRef.current);
     }
   };
 
-  const downloadAudio = (blob, meetingTitle) => {
-    const url = URL.createObjectURL(blob);
+  const uploadToServer = async () => {
+    if (!audioBlobRef.current) {
+      setError('No audio file to upload');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      // Create a File object from the blob
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const extension = audioBlobRef.current.type.includes('webm') ? 'webm' : 'ogg';
+      const fileName = `${meeting.title.replace(/\s+/g, '_')}_${timestamp}.${extension}`;
+      const audioFile = new File([audioBlobRef.current], fileName, { 
+        type: audioBlobRef.current.type 
+      });
+
+      // Automated workflow: Transcribe → Translate → Analyze
+      console.log('Starting complete audio processing workflow...');
+      const result = await audioApi.processAudioComplete(audioFile, meeting.title, true);
+      
+      console.log('Complete workflow finished!');
+      console.log('- Transcription ID:', result.transcription.id);
+      console.log('- Translation ID:', result.translation.id);
+      console.log('- Analysis ID:', result.analysis.id);
+      
+      setUploadSuccess(true);
+      setError(null);
+    } catch (err) {
+      console.error('Processing error:', err);
+      setError(err.message || 'Failed to process audio. Please try again.');
+      setUploadSuccess(false);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const downloadAudio = () => {
+    if (!audioBlobRef.current) return;
+    
+    const url = URL.createObjectURL(audioBlobRef.current);
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-    // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    a.download = `${meetingTitle.replace(/\s+/g, '_')}_${timestamp}.mp3`;
+    a.download = `${meeting.title.replace(/\s+/g, '_')}_${timestamp}.webm`;
     document.body.appendChild(a);
     a.click();
     
-    // Cleanup
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
@@ -136,9 +203,25 @@ function MeetingRecorder({ meeting, onBack }) {
           </h1>
           <p className="text-gray-600 mb-6">{meeting.description}</p>
           
-          <div className="flex items-center gap-4 text-sm text-gray-500 mb-8">
-            <span className="flex items-center gap-1">
-              📅 {meeting.date}
+          <div >
+                {uploading && (
+                  <div className="text-blue-600 font-medium mb-4">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                    <p>Processing audio: Transcribe → Translate → Analyze...</p>
+                  </div>
+                )}
+                {uploadSuccess && !uploading && (
+                  <div className="text-green-600 font-medium mb-4">
+                    ✓ Complete! Audio transcribed, translated, and analyzed successfully!
+                  </div>
+                )}
+                {!uploading && !uploadSuccess && (
+                  <div className="text-gray-600 font-medium mb-4">
+                    Recording saved. Ready to process.
+                  </div>
+                )}
+            <span>
+              {meeting.date}
             </span>
             <span className="flex items-center gap-1">
               🕐 {meeting.time}
@@ -199,15 +282,35 @@ function MeetingRecorder({ meeting, onBack }) {
             {isRecording && (
               <>
                 <button
-                  onClick={pauseRecording}
-                  className="px-6 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
-                >
-                  {isPaused ? '▶️ Resume' : '⏸️ Pause'}
-                </button>
+               >
+                {!uploadSuccess && (
+                  <button
+                    onClick={uploadToServer}
+                    disabled={uploading}
+                    className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploading ? 'Processing...' : '📤 Process Audio'}
+                  </button>
+                )}
                 <button
-                  onClick={endMeeting}
-                  className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  onClick={downloadAudio}
+                  disabled={uploading}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
+                  💾 Download
+                </button>
+                After recording, you can upload the audio to be transcribed by the server
+                  onClick={() => {
+                    setAudioURL(null);
+                    setRecordingTime(0);
+                    setUploadSuccess(false);
+                    audioBlobRef.current = null;
+                  }}
+                  disabled={uploading}
+                  className="px-8 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                <button>
+                  🔄 Record Again
+                </button>
                   ⏹️ End Meeting
                 </button>
               </>
