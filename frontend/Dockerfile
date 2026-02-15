@@ -13,6 +13,11 @@ RUN npm ci
 # Copy application files
 COPY . .
 
+# Set environment variable for Vite build
+# This MUST be set at build time for Vite to embed it in the bundle
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+
 # Build the application
 RUN npm run build
 
