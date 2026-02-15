@@ -30,6 +30,27 @@ function MeetingRecorder({ meeting, onBack }) {
   const startRecording = async () => {
     try {
       setError(null);
+      
+      // Check if mediaDevices API is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError(
+          'Failed to access audio: Cannot read properties of undefined (reading \'getUserMedia\'). ' +
+          'Please ensure the page is served over HTTPS. ' +
+          'If you\'re on a VM, make sure to use HTTPS or access via secure connection. ' +
+          'Your browser may also not support media recording.'
+        );
+        return;
+      }
+
+      // Check if we're in a secure context
+      if (!window.isSecureContext) {
+        setError(
+          'Audio recording requires a secure context (HTTPS). ' +
+          'Please access this page via HTTPS or localhost.'
+        );
+        return;
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
       // Create MediaRecorder with appropriate MIME type
@@ -85,7 +106,17 @@ function MeetingRecorder({ meeting, onBack }) {
       
     } catch (err) {
       console.error('Error accessing microphone:', err);
-      setError('Failed to access microphone. Please grant permission and try again.');
+      
+      // Provide more specific error messages
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Failed to access audio: Permission denied. Please grant microphone permission and select audio when sharing screen/tab.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setError('Failed to access audio: No microphone found. Please connect a microphone and try again.');
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        setError('Failed to access audio: Microphone is already in use by another application.');
+      } else {
+        setError('Failed to access audio: ' + (err.message || 'Please grant microphone permission and try again.'));
+      }
     }
   };
 
@@ -335,6 +366,10 @@ function MeetingRecorder({ meeting, onBack }) {
               <p className="text-sm text-blue-800">
                 <strong>Note:</strong> When you click "Record Audio", your browser will ask for microphone permission. 
                 The audio will be automatically saved as an MP3 file when you end the meeting.
+              </p>
+              <p className="text-sm text-blue-800 mt-2">
+                <strong>⚠️ HTTPS Required:</strong> Audio recording requires a secure context (HTTPS). 
+                If you're accessing via HTTP on a VM, please configure HTTPS or use an SSH tunnel to localhost.
               </p>
             </div>
           )}
