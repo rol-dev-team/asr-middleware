@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
+import { audioApi } from '../services/api';
 import MeetingAnalysisDetail from './MeetingAnalysisDetail';
-
-const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 function MeetingAnalysisList() {
   const [analyses, setAnalyses] = useState([]);
@@ -16,18 +15,12 @@ function MeetingAnalysisList() {
   const fetchAnalyses = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/audios/analyses?skip=0&limit=100`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await audioApi.getAnalyses(0, 100);
       setAnalyses(data);
       setError(null);
     } catch (err) {
       console.error('Error fetching analyses:', err);
-      setError('Failed to load meeting analyses. Please try again later.');
+      setError(err.message || 'Failed to load meeting analyses. Please try again later.');
     } finally {
       setLoading(false);
     }

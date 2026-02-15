@@ -1,7 +1,10 @@
 version: '3.8'
 
+# Production docker-compose configuration
+# Uses pre-built images from DockerHub instead of building locally
+
 services:
-  # Database service
+  # Database service - remains unchanged
   db:
     image: postgres:16-alpine
     container_name: asr-middleware-db
@@ -20,11 +23,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # Backend API service
+  # Backend API service - uses DockerHub image
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME:-yourusername}/asr-middleware-backend:latest
     container_name: asr-middleware-backend
     env_file:
       - ./backend/.env
@@ -45,11 +46,9 @@ services:
       retries: 3
       start_period: 40s
 
-  # Frontend service
+  # Frontend service - uses DockerHub image
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME:-yourusername}/asr-middleware-frontend:latest
     container_name: asr-middleware-frontend
     networks:
       - asr-network
@@ -62,7 +61,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # Nginx reverse proxy
+  # Nginx reverse proxy - unchanged
   nginx:
     image: nginx:alpine
     container_name: asr-middleware-nginx
