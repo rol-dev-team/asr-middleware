@@ -179,6 +179,42 @@ export const audioApi = {
     return response.json();
   },
 
+  /**
+   * Automated workflow: Upload → Transcribe → Translate → Analyze
+   * This chains all three API calls automatically
+   */
+  async processAudioComplete(file, title, generateMarkdown = true) {
+    console.log('Starting automated workflow: Transcribe → Translate → Analyze');
+    
+    // Step 1: Transcribe
+    console.log('Step 1: Transcribing audio...');
+    const transcription = await this.transcribeAudio(file, title);
+    console.log('Transcription completed:', transcription.id);
+    
+    // Step 2: Translate
+    console.log('Step 2: Translating to English...');
+    const translation = await translationApi.translateToEnglish({
+      audio_transcription_id: transcription.id,
+      source_text: transcription.transcription_text
+    });
+    console.log('Translation completed:', translation.id);
+    
+    // Step 3: Analyze
+    console.log('Step 3: Generating meeting analysis...');
+    const analysis = await this.createAnalysis({
+      audio_translation_id: translation.id,
+      generate_markdown: generateMarkdown
+    });
+    console.log('Analysis completed:', analysis.id);
+    
+    // Return all results
+    return {
+      transcription,
+      translation,
+      analysis
+    };
+  },
+
   async getTranscriptions(skip = 0, limit = 100) {
     const response = await apiRequest(
       `${API_BASE_URL}/audios/transcriptions?skip=${skip}&limit=${limit}`,
