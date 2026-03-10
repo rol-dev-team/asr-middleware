@@ -12,7 +12,7 @@ Automated Speech Recognition (ASR) Middleware application with FastAPI backend a
 
 ## Quick Start
 
-See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
+See [QUICKSTART.md](./docs/QUICKSTART.md) for detailed setup instructions.
 
 ### Local Development
 
@@ -31,7 +31,7 @@ docker-compose up --build
 
 ### Production Deployment
 
-See [CI-CD-SETUP.md](CI-CD-SETUP.md) for automated deployment setup.
+See [CI-CD-SETUP.md](./docs/CI-CD-SETUP.md) for automated deployment setup.
 
 ```bash
 # On VM server
@@ -70,9 +70,9 @@ Automated deployment pipeline with:
 - ✅ Database migrations via Alembic
 - ✅ Zero-downtime database updates
 
-See [CI-CD-SETUP.md](CI-CD-SETUP.md) for full documentation.
+See [CI-CD-SETUP.md](./docs/CI-CD-SETUP.md) for full documentation.
 
-**Quick Reference**: [CI-CD-QUICKREF.md](CI-CD-QUICKREF.md)
+**Quick Reference**: [CI-CD-QUICKREF.md](./docs/CI-CD-QUICKREF.md)
 
 ## Project Structure
 
@@ -101,11 +101,11 @@ asr-middleware/
 
 ## Documentation
 
-- **[QUICKSTART.md](QUICKSTART.md)** - Quick setup guide
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Manual deployment guide
-- **[CI-CD-SETUP.md](CI-CD-SETUP.md)** - Automated deployment setup
-- **[CI-CD-QUICKREF.md](CI-CD-QUICKREF.md)** - Command reference
-- **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** - Deployment checklist
+- **[QUICKSTART.md](./docs/QUICKSTART.md)** - Quick setup guide
+- **[DEPLOYMENT.md](./docs/DEPLOYMENT.md)** - Manual deployment guide
+- **[CI-CD-SETUP.md](./docs/CI-CD-SETUP.md)** - Automated deployment setup
+- **[CI-CD-QUICKREF.md](./docs/CI-CD-QUICKREF.md)** - Command reference
+- **[DEPLOYMENT_CHECKLIST.md](./docs/DEPLOYMENT_CHECKLIST.md)** - Deployment checklist
 
 ## Technology Stack
 
@@ -230,4 +230,4 @@ For issues or questions:
 1. Check documentation files
 2. Review logs: `docker-compose logs`
 3. Check GitHub Issues
-4. Review [CI-CD-SETUP.md](CI-CD-SETUP.md) for deployment issues
+4. Review [CI-CD-SETUP.md](./docs/CI-CD-SETUP.md) for deployment issues
