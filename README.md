@@ -1,7 +1,7 @@
 # ASR Middleware
 
 Automated Speech Recognition (ASR) Middleware application with FastAPI backend and React frontend.
-
+# Something added here
 ## Features
 
 - 🎤 Audio transcription and translation
@@ -231,3 +231,4 @@ For issues or questions:
 2. Review logs: `docker-compose logs`
 3. Check GitHub Issues
 4. Review [CI-CD-SETUP.md](./docs/CI-CD-SETUP.md) for deployment issues
+
