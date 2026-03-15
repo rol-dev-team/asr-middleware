@@ -217,6 +217,53 @@ curl http://localhost/
 docker-compose ps
 ```
 
+## 🧵 Background Jobs (Celery)
+
+The `/audios/process-async` endpoint enqueues a Celery task into Redis. That task will **not run** unless a Celery worker is running.
+
+### If you run everything in Docker
+
+- Start the worker (and everything else):
+
+```bash
+docker-compose up -d --build
+```
+
+- Watch worker logs:
+
+```bash
+docker-compose logs -f worker
+```
+
+### If you run the API on your host (Windows/macOS/Linux)
+
+- Ensure Redis is reachable from the host (either run Redis locally or publish the container port).
+- Set `REDIS_URL=redis://localhost:6379/0` in your environment.
+- Start a worker process in another terminal:
+
+```bash
+cd backend
+# Windows (Celery multiprocessing is not supported; use solo pool)
+.\.venv\Scripts\python -m celery -A app.worker.celery_app.celery_app worker -l info -Q celery --pool=solo
+
+# macOS/Linux
+celery -A app.worker.celery_app.celery_app worker -l info -Q celery
+```
+
+### Quick diagnosis (queued vs consumed)
+
+- If jobs stay stuck in `queued`, check the Redis queue length (default queue name is `celery`):
+
+```bash
+docker exec asr-middleware-redis redis-cli LLEN celery
+```
+
+- `LLEN > 0` means tasks are being published but no worker is consuming.
+
+### About the Redis "Possible SECURITY ATTACK" log
+
+If Redis logs a message about `POST` or `Host:` commands, it usually means something sent an HTTP request to the Redis port (often a port scan or a misdirected healthcheck). Redis should not be exposed publicly; keep it internal to Docker, or if you must publish it for local dev, bind it to `127.0.0.1` only.
+
 ## 📊 Performance Tuning
 
 ### Backend Workers

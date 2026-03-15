@@ -13,8 +13,12 @@ from app.api.models import (
     AudioTranslationPublic,
     MeetingAnalysis,
     MeetingAnalysisCreate,
-    MeetingAnalysisPublic
+    MeetingAnalysisPublic,
+    ProcessingJob,
+    ProcessingJobPublic,
+    ProcessAudioStartResponse,
 )
+from app.worker.tasks import process_audio_pipeline
 from google import genai
 from google.genai import types
 import os
@@ -50,7 +54,8 @@ async def transcribe_audio(
         raise HTTPException(status_code=400, detail="File must be an audio file")
     
     # Generate filename with Title_Client_Timestamp format
-    file_extension = Path(file.filename).suffix
+    original_filename = file.filename or "audio.webm"
+    file_extension = Path(original_filename).suffix or ".webm"
     client_uuid = str(current_user.id)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     clean_title = title.replace(" ", "_").replace("/", "_").replace("\\", "_")
@@ -114,6 +119,130 @@ async def transcribe_audio(
     await session.refresh(audio_transcription)
     
     return audio_transcription
+
+
+@router.post("/process-async", response_model=ProcessAudioStartResponse)
+async def process_audio_async(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    file: UploadFile = File(...),
+    title: str = "Untitled",
+    generate_markdown: bool = True,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Start the full Transcribe -> Translate -> Analyze pipeline in the background.
+    Returns immediately with a job id that can be polled for status.
+    """
+    if not file.content_type or not file.content_type.startswith("audio/"):
+        raise HTTPException(status_code=400, detail="File must be an audio file")
+
+    original_filename = file.filename or "audio.webm"
+    file_extension = Path(original_filename).suffix or ".webm"
+    client_uuid = str(current_user.id)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    clean_title = title.replace(" ", "_").replace("/", "_").replace("\\", "_")
+    unique_filename = f"{clean_title}_{client_uuid}_{timestamp}{file_extension}"
+
+    client_dir = MEDIA_DIR / client_uuid
+    client_dir.mkdir(exist_ok=True)
+    file_path = client_dir / unique_filename
+
+    try:
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+    job = ProcessingJob(
+        user_id=current_user.id,
+        title=title,
+        status="queued",
+        stage="queued",
+        progress=0,
+    )
+    session.add(job)
+    await session.commit()
+    await session.refresh(job)
+
+    try:
+        celery_task_id = str(uuid.uuid4())
+        process_audio_pipeline.apply_async(
+            kwargs={
+                "job_id": str(job.id),
+                "file_path": str(file_path),
+                "mime_type": file.content_type,
+                "original_filename": original_filename,
+                "user_id": str(current_user.id),
+                "title": title,
+                "generate_markdown": generate_markdown,
+            },
+            task_id=celery_task_id,
+            retry=False,
+        )
+        job.celery_task_id = celery_task_id
+        job.updated_at = datetime.utcnow()
+        session.add(job)
+        await session.commit()
+    except Exception as e:
+        job.status = "failed"
+        job.stage = "failed"
+        job.progress = 100
+        job.error_message = f"Failed to enqueue background job: {str(e)}"
+        job.updated_at = datetime.utcnow()
+        session.add(job)
+        await session.commit()
+        raise HTTPException(status_code=500, detail="Failed to enqueue background processing")
+
+    return ProcessAudioStartResponse(
+        job_id=job.id,
+        status=job.status,
+        stage=job.stage,
+        progress=job.progress,
+    )
+
+
+@router.get("/process-jobs/{job_id}", response_model=ProcessingJobPublic)
+async def get_processing_job_status(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    job_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Poll background processing status for a previously created job.
+    """
+    statement = select(ProcessingJob).where(
+        ProcessingJob.id == job_id,
+        ProcessingJob.user_id == current_user.id,
+    )
+    result = await session.exec(statement)
+    job = result.first()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Processing job not found")
+
+    return job
+
+
+@router.get("/process-jobs", response_model=List[ProcessingJobPublic])
+async def get_processing_jobs(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    session: AsyncSession = Depends(get_session),
+    skip: int = 0,
+    limit: int = 20,
+):
+    """
+    List recent processing jobs for the current user.
+    """
+    statement = (
+        select(ProcessingJob)
+        .where(ProcessingJob.user_id == current_user.id)
+        .offset(skip)
+        .limit(limit)
+        .order_by(ProcessingJob.created_at.desc())
+    )
+    result = await session.exec(statement)
+    return result.all()
 
 
 @router.get("/", response_model=List[AudioTranscriptionPublic])

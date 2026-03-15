@@ -4,6 +4,18 @@ version: '3.8'
 # Uses pre-built images from DockerHub instead of building locally
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: asr-middleware-redis
+    networks:
+      - asr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Database service - remains unchanged
   db:
     image: postgres:16-alpine
@@ -31,12 +43,15 @@ services:
       - ./backend/.env
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend/media:/app/media
     networks:
       - asr-network
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -45,6 +60,26 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  worker:
+    image: ${DOCKERHUB_USERNAME:-yourusername}/asr-middleware-backend:latest
+    container_name: asr-middleware-worker
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
+      - REDIS_URL=redis://redis:6379/0
+    command: celery -A app.worker.celery_app.celery_app worker -l info -Q celery
+    volumes:
+      - ./backend/media:/app/media
+    networks:
+      - asr-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   # Frontend service - uses DockerHub image
   frontend:

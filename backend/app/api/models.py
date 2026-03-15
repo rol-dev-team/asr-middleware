@@ -144,5 +144,46 @@ class MeetingAnalysisPublic(SQLModel):
     created_at: datetime
 
 
+class ProcessingJob(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
+    title: str = Field(max_length=255)
+    status: str = Field(default="queued", max_length=32, index=True)
+    stage: str = Field(default="queued", max_length=32)
+    progress: int = Field(default=0, ge=0, le=100)
+    error_message: Optional[str] = Field(default=None)
+    celery_task_id: Optional[str] = Field(default=None, index=True, max_length=255)
+    audio_transcription_id: Optional[uuid.UUID] = Field(default=None, foreign_key="audiotranscription.id")
+    audio_translation_id: Optional[uuid.UUID] = Field(default=None, foreign_key="audiotranslation.id")
+    meeting_analysis_id: Optional[uuid.UUID] = Field(default=None, foreign_key="meetinganalysis.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ProcessingJobPublic(SQLModel):
+    id: uuid.UUID
+    title: str
+    status: str
+    stage: str
+    progress: int
+    error_message: Optional[str]
+    audio_transcription_id: Optional[uuid.UUID]
+    audio_translation_id: Optional[uuid.UUID]
+    meeting_analysis_id: Optional[uuid.UUID]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProcessAudioStartResponse(SQLModel):
+    job_id: uuid.UUID
+    status: str
+    stage: str
+    progress: int
+
+
+class ProcessingJobListResponse(SQLModel):
+    jobs: list[ProcessingJobPublic]
+
+
 class UserStatusUpdate(SQLModel):
     is_active: bool
