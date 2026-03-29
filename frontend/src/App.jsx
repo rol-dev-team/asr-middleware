@@ -1,102 +1,48 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from './contexts/AuthContext'
-import { initializeApi, authApi } from './services/api'
-import Login from './components/Login'
-import MeetingList from './components/MeetingList'
-import MeetingAnalysisList from './components/MeetingAnalysisList'
-import './App.css'
+import { useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import Index from "./pages/Index.jsx";
+import Login from "./pages/Login.jsx";
+import MeetingInsights from "./pages/MeetingInsights.jsx";
+import NotFound from "./pages/NotFound.jsx";
 
-function App() {
-  const auth = useAuth()
-  const [currentView, setCurrentView] = useState('meetings') // 'meetings' or 'analyses'
+const queryClient = new QueryClient();
 
-  // Initialize API service with auth context
-  useEffect(() => {
-    initializeApi(auth)
-  }, [auth])
+const App = () => {
+  const [user, setUser] = useState(() => {
+    const saved = sessionStorage.getItem("user");
+    return saved ? JSON.parse(saved) : null;
+  });
 
-  const handleLogout = async () => {
-    try {
-      await authApi.logout()
-    } catch (error) {
-      console.error('Logout error:', error)
-    } finally {
-      auth.logout()
-    }
-  }
+  const handleLogin = (userData) => {
+    setUser(userData);
+    sessionStorage.setItem("user", JSON.stringify(userData));
+  };
 
-  // Show loading while checking authentication
-  if (auth.loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show login if not authenticated
-  if (!auth.isAuthenticated) {
-    return <Login />
-  }
+  const handleLogout = () => {
+    setUser(null);
+    sessionStorage.removeItem("user");
+  };
 
   return (
-    <div className="w-full">
-      {/* Navigation Bar */}
-      <nav className="bg-white shadow-md">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🎙️</span>
-              <span className="text-xl font-bold text-gray-900">ASR Middleware</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentView('meetings')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    currentView === 'meetings'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  📅 Meetings
-                </button>
-                <button
-                  onClick={() => setCurrentView('analyses')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    currentView === 'analyses'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  📊 Analyses
-                </button>
-              </div>
-              <div className="flex items-center gap-3 border-l pl-4">
-                {auth.user && (
-                  <div className="text-sm text-gray-700">
-                    <span className="font-medium">{auth.user.username}</span>
-                  </div>
-                )}
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={handleLogin} />} />
+            <Route path="/" element={user ? <Index onLogout={handleLogout} user={user} /> : <Navigate to="/login" />} />
+             <Route path="/insights" element={user ? <MeetingInsights onLogout={handleLogout} user={user} /> : <Navigate to="/login" />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
-      {/* Content */}
-      {currentView === 'meetings' ? <MeetingList /> : <MeetingAnalysisList />}
-    </div>
-  )
-}
-
-export default App
+export default App;

@@ -1,0 +1,250 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 225 20% 96%;
+    --foreground: 222 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 20% 12%;
+
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 20% 20%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 215 15% 45%;
+
+    --accent: 200 90% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 16% 88%;
+    --input: 220 16% 88%;
+    --ring: 217 91% 55%;
+
+    --radius: 0.75rem;
+
+    --glow-primary: 0 0 30px hsl(217 91% 55% / 0.12);
+    --glow-strong: 0 0 50px hsl(217 91% 55% / 0.18);
+
+    --sidebar-background: 220 20% 96%;
+    --sidebar-foreground: 220 20% 20%;
+    --sidebar-primary: 217 91% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 92%;
+    --sidebar-accent-foreground: 220 20% 20%;
+    --sidebar-border: 220 16% 88%;
+    --sidebar-ring: 217 91% 55%;
+  }
+
+  .dark {
+    --background: 225 25% 3%;
+    --foreground: 210 20% 92%;
+
+    --card: 225 20% 7%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 225 20% 7%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 225 18% 12%;
+    --secondary-foreground: 210 20% 85%;
+
+    --muted: 225 16% 10%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 200 90% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 225 16% 14%;
+    --input: 225 16% 14%;
+    --ring: 217 91% 60%;
+
+    --glow-primary: 0 0 40px hsl(217 91% 60% / 0.25);
+    --glow-strong: 0 0 60px hsl(217 91% 60% / 0.35);
+
+    --sidebar-background: 225 20% 5%;
+    --sidebar-foreground: 210 20% 85%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 18% 12%;
+    --sidebar-accent-foreground: 210 20% 85%;
+    --sidebar-border: 225 16% 14%;
+    --sidebar-ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .font-mono-tech {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .glow-primary {
+    box-shadow: var(--glow-primary);
+  }
+
+  .glow-strong {
+    box-shadow: var(--glow-strong);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(217 91% 60%), hsl(200 90% 65%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-subtle {
+    background: linear-gradient(135deg, hsl(var(--foreground)), hsl(var(--muted-foreground)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glass {
+    background: hsl(var(--card) / 0.6);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  }
+
+  .dark .glass {
+    background: hsl(var(--card) / 0.4);
+  }
+
+  .glass-strong {
+    background: hsl(var(--card) / 0.85);
+    backdrop-filter: blur(30px) saturate(1.5);
+    -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  }
+
+  .dark .glass-strong {
+    background: hsl(var(--card) / 0.6);
+  }
+
+  .gradient-border {
+    position: relative;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(160deg, hsl(217 91% 60% / 0.4), hsl(200 90% 60% / 0.1), transparent 60%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .ambient-glow {
+    position: relative;
+  }
+
+  .ambient-glow::after {
+    content: '';
+    position: absolute;
+    top: -40%;
+    left: -20%;
+    width: 140%;
+    height: 140%;
+    background: radial-gradient(ellipse at 50% 0%, hsl(217 91% 60% / 0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .dark .ambient-glow::after {
+    background: radial-gradient(ellipse at 50% 0%, hsl(217 91% 60% / 0.15) 0%, transparent 70%);
+  }
+
+  .btn-gradient {
+    background: linear-gradient(135deg, hsl(217 91% 58%), hsl(200 90% 55%));
+    transition: all 0.3s ease;
+  }
+
+  .btn-gradient:hover {
+    background: linear-gradient(135deg, hsl(217 91% 62%), hsl(200 90% 58%));
+    box-shadow: 0 8px 30px hsl(217 91% 60% / 0.3), 0 0 0 1px hsl(217 91% 60% / 0.1);
+    transform: translateY(-1px);
+  }
+
+  .dark .btn-gradient:hover {
+    box-shadow: 0 8px 40px hsl(217 91% 60% / 0.4), 0 0 0 1px hsl(217 91% 60% / 0.2);
+  }
+
+  .btn-gradient:active {
+    transform: translateY(0);
+  }
+
+  .shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      115deg,
+      transparent 40%,
+      hsl(0 0% 100% / 0.08) 45%,
+      hsl(0 0% 100% / 0.15) 50%,
+      hsl(0 0% 100% / 0.08) 55%,
+      transparent 60%
+    );
+    animation: shine 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes shine {
+    0%, 100% { transform: translateX(-100%) rotate(0deg); }
+    50% { transform: translateX(100%) rotate(0deg); }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+
+  @keyframes waveform {
+    0%, 100% { height: 12px; }
+    50% { height: var(--wave-height, 28px); }
+  }
+
+  .animate-float {
+    animation: float 4s ease-in-out infinite;
+  }
+}
