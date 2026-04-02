@@ -65,7 +65,7 @@ async def translate_banglish_to_english(
         source_text=source_text,
         translated_text="Processing...", # Placeholder
         user_id=current_user.id,
-        model_used="gemini-2.0-flash"
+        model_used="gemini-2.5-flash"
     )
     
     session.add(translation)
