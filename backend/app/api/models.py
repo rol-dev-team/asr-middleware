@@ -133,10 +133,10 @@ class MeetingAnalysisCreate(SQLModel):
 class MeetingAnalysisPublic(SQLModel):
     id: uuid.UUID
     audio_translation_id: uuid.UUID
-    content_text: str
-    summary: str
-    business_insights: str
-    technical_insights: str
+    content_text: Optional[str]
+    summary: Optional[str]
+    business_insights: Optional[str]
+    technical_insights: Optional[str]
     action_items: Optional[str]
     key_topics: Optional[str]
     notes_markdown: Optional[str]
