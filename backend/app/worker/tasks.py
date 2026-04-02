@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import uuid
 from datetime import datetime
 from celery.utils.log import get_task_logger
@@ -10,6 +11,10 @@ from app.worker.celery_app import celery_app
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.api.models import AudioTranscription, AudioTranslation, MeetingAnalysis
+
+# Maximum time (in seconds) to wait for Gemini file processing before giving up
+_GEMINI_POLL_TIMEOUT = 120
+_GEMINI_POLL_INTERVAL = 2
 
 load_dotenv()
 
@@ -34,7 +39,6 @@ def task_transcribe_audio(audio_id: str, file_path: str, mime_type: str):
             audio_file = client.files.upload(file=f, config={'mime_type': mime_type})
 
             # Wait for the file to be 'ACTIVE'
-            import time
             while audio_file.state.name == "PROCESSING":
                 time.sleep(2)
                 audio_file = client.files.get(name=audio_file.name)
@@ -252,10 +256,24 @@ def task_full_meeting_pipeline(audio_id: str, translation_id: str, analysis_id: 
         with open(file_path, 'rb') as f:
             audio_file = client.files.upload(file=f, config={'mime_type': mime_type})
             uploaded_gemini_file_name = audio_file.name
+            elapsed = 0
             while audio_file.state.name == "PROCESSING":
-                import time
-                time.sleep(2)
+                if elapsed >= _GEMINI_POLL_TIMEOUT:
+                    raise TimeoutError(
+                        f"Gemini file processing timed out after {_GEMINI_POLL_TIMEOUT}s "
+                        f"for audio_id={audio_id}"
+                    )
+                time.sleep(_GEMINI_POLL_INTERVAL)
+                elapsed += _GEMINI_POLL_INTERVAL
                 audio_file = client.files.get(name=audio_file.name)
+
+            if audio_file.state.name == "FAILED":
+                raise ValueError(f"Gemini file processing failed for audio_id={audio_id}")
+            if audio_file.state.name != "ACTIVE":
+                raise ValueError(
+                    f"Gemini file in unexpected state '{audio_file.state.name}' "
+                    f"for audio_id={audio_id}"
+                )
 
         transcribe_resp = client.models.generate_content(
             model="gemini-2.5-flash",
@@ -306,6 +324,10 @@ After the translation, on a new line, also provide your confidence score (0.0 to
 
         # Update Translation Record
         trans_rec = db.query(AudioTranslation).filter(AudioTranslation.id == uuid.UUID(translation_id)).first()
+        if trans_rec is None:
+            logger.error(f"AudioTranslation record not found for id={translation_id} in task_full_meeting_pipeline")
+            db.rollback()
+            raise ValueError(f"AudioTranslation record not found for id={translation_id}")
         trans_rec.source_text = transcription_text
         trans_rec.translated_text = translated_text
         trans_rec.confidence_score = confidence
