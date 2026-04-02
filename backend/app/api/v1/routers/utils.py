@@ -44,7 +44,7 @@ async def create_full_analysis_pipeline(
     
     contents = await file.read()
     client_uuid = str(current_user.id)
-    safe_title = re.sub(r'[^A-Za-z0-9_-]', '_', title)
+    safe_title = re.sub(r'_+', '_', re.sub(r'[^A-Za-z0-9_-]', '_', title)).strip('_')
     unique_filename = f"{safe_title}_{uuid.uuid4().hex[:8]}{Path(file.filename).suffix}"
     
     client_dir = MEDIA_DIR / client_uuid
