@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import AsyncEngine
 from typing import AsyncGenerator
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("ASYNC_DATABASE_URL")
 
 engine = AsyncEngine(create_engine(DATABASE_URL, echo=True, future=True))
 
