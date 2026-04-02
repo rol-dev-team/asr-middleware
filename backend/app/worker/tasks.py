@@ -39,12 +39,24 @@ def task_transcribe_audio(audio_id: str, file_path: str, mime_type: str):
             audio_file = client.files.upload(file=f, config={'mime_type': mime_type})
 
             # Wait for the file to be 'ACTIVE'
+            elapsed = 0
             while audio_file.state.name == "PROCESSING":
-                time.sleep(2)
+                if elapsed >= _GEMINI_POLL_TIMEOUT:
+                    raise TimeoutError(
+                        f"Gemini file processing timed out after {_GEMINI_POLL_TIMEOUT}s "
+                        f"for audio_id={audio_id}"
+                    )
+                time.sleep(_GEMINI_POLL_INTERVAL)
+                elapsed += _GEMINI_POLL_INTERVAL
                 audio_file = client.files.get(name=audio_file.name)
 
             if audio_file.state.name == "FAILED":
-                raise Exception("Gemini file processing failed.")
+                raise ValueError(f"Gemini file processing failed for audio_id={audio_id}")
+            if audio_file.state.name != "ACTIVE":
+                raise ValueError(
+                    f"Gemini file in unexpected state '{audio_file.state.name}' "
+                    f"for audio_id={audio_id}"
+                )
         
         # 2. Generate Content (Transcription)
         response = client.models.generate_content(
