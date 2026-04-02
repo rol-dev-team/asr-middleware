@@ -21,7 +21,7 @@ from app.api.models import *
 config = context.config
 
 # Override the sqlalchemy.url setting with an environment variable
-database_url = os.getenv("DATABASE_URL")
+database_url = os.getenv("ASYNC_DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 
