@@ -52,67 +52,29 @@ async def translate_banglish_to_english(
     if not audio:
         raise HTTPException(status_code=404, detail="Audio transcription not found")
     
-    # Use the source_text from the request or fall back to the audio's transcription_text
-    source_text = translation_data.source_text or audio[0].transcription_text
+    # Use the source_text from the audio's transcription_text
+    source_text = audio[0].transcription_text
     
     if not source_text:
         raise HTTPException(status_code=400, detail="No text available to translate")
     
-    # Translate using Gemini API
-    try:
-        print("Translating Banglish to English...")
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                f"""You are an expert translator specializing in Banglish to English translation.
-                
-Banglish is Bangla language written in Roman/Latin script. Your task is to translate the following Banglish text into proper, natural English.
-                
-Banglish text: {source_text}
-                
-Provide ONLY the English translation. Be accurate and natural.
-                
-After the translation, on a new line, also provide your confidence score (0.0 to 1.0) in the format: 'Confidence: 0.95'"""
-            ]
-        )
-        
-        response_text = response.text.strip()
-        
-        # Try to extract confidence score if provided
-        confidence_score = None
-        translated_text = response_text
-        
-        # Look for confidence score in the response
-        confidence_match = re.search(r'Confidence:\s*([0-9]*\.?[0-9]+)', response_text, re.IGNORECASE)
-        if confidence_match:
-            try:
-                confidence_score = float(confidence_match.group(1))
-                # Remove the confidence line from the translated text
-                translated_text = re.sub(r'\n?Confidence:\s*[0-9]*\.?[0-9]+.*$', '', response_text, flags=re.IGNORECASE).strip()
-            except ValueError:
-                pass
-        
-        # If no confidence found, estimate based on response quality (simple heuristic)
-        if confidence_score is None:
-            # Default confidence score
-            confidence_score = 0.85
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
-    
-    # Create database record
+    # Create record
     translation = AudioTranslation(
+        id=uuid.uuid4(),
         audio_transcription_id=translation_data.audio_transcription_id,
         source_text=source_text,
-        translated_text=translated_text,
-        confidence_score=confidence_score,
+        translated_text="Processing...", # Placeholder
         user_id=current_user.id,
-        model_used="gemini-2.5-flash"
+        model_used="gemini-2.0-flash"
     )
     
     session.add(translation)
     await session.commit()
     await session.refresh(translation)
+    
+    # Trigger Task
+    from app.worker.tasks import task_translate_audio
+    task_translate_audio.delay(str(translation.id), source_text)
     
     return translation
 
@@ -145,7 +107,7 @@ async def get_translation_by_id(
     """
     statement = select(AudioTranslation).where(AudioTranslation.user_id == current_user.id, AudioTranslation.id == translation_id)
     result = await session.exec(statement)
-    translation = result.all()
+    translation = result.first()
     
     if not translation:
         raise HTTPException(status_code=404, detail="Translation not found")
