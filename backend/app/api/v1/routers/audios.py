@@ -135,7 +135,10 @@ async def create_meeting_analysis(
         audio_translation_id=analysis_data.audio_translation_id,
         user_id=current_user.id,
         model_used="gemini-2.5-flash",
-        summary="Processing..." # Placeholder
+        summary="Processing...",  # Placeholder
+        content_text="Processing...",  # Placeholder to satisfy MeetingAnalysisPublic
+        business_insights="Processing...",  # Placeholder to satisfy MeetingAnalysisPublic
+        technical_insights="Processing..."  # Placeholder to satisfy MeetingAnalysisPublic
     )
     session.add(new_analysis)
     await session.commit()
