@@ -103,11 +103,21 @@ After the translation, on a new line, also provide your confidence score (0.0 to
             confidence_score = float(confidence_match.group(1))
             translated_text = re.sub(r'\n?Confidence:.*$', '', full_text, flags=re.IGNORECASE | re.MULTILINE).strip()
 
-        translation_record = db.query(AudioTranslation).filter(AudioTranslation.id == translation_id).first()
-        if translation_record:
-            translation_record.translated_text = translated_text
-            translation_record.confidence_score = confidence_score
-            db.commit()
+        try:
+            translation_uuid = uuid.UUID(translation_id)
+        except (ValueError, TypeError):
+            translation_uuid = None
+
+        if translation_uuid is not None:
+            translation_record = (
+                db.query(AudioTranslation)
+                .filter(AudioTranslation.id == translation_uuid)
+                .first()
+            )
+            if translation_record:
+                translation_record.translated_text = translated_text
+                translation_record.confidence_score = confidence_score
+                db.commit()
             
     finally:
         db.close()
