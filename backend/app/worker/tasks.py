@@ -369,6 +369,10 @@ After the translation, on a new line, also provide your confidence score (0.0 to
 
         # Update Analysis Record
         analysis_rec = db.query(MeetingAnalysis).filter(MeetingAnalysis.id == uuid.UUID(analysis_id)).first()
+        if analysis_rec is None:
+            logger.error(f"MeetingAnalysis record not found for id={analysis_id} in task_full_meeting_pipeline")
+            db.rollback()
+            raise ValueError(f"MeetingAnalysis record not found for id={analysis_id}")
         analysis_rec.summary = summary
         analysis_rec.business_insights = business_insights
         analysis_rec.technical_insights = technical_insights
