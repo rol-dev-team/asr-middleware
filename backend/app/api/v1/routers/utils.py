@@ -14,6 +14,7 @@ from app.api.models import (
 from google import genai
 from google.genai import types
 import os
+import re
 import uuid
 from pathlib import Path
 
@@ -43,7 +44,8 @@ async def create_full_analysis_pipeline(
     
     contents = await file.read()
     client_uuid = str(current_user.id)
-    unique_filename = f"{title.replace(' ', '_')}_{uuid.uuid4().hex[:8]}{Path(file.filename).suffix}"
+    safe_title = re.sub(r'[^A-Za-z0-9_-]', '_', title)
+    unique_filename = f"{safe_title}_{uuid.uuid4().hex[:8]}{Path(file.filename).suffix}"
     
     client_dir = MEDIA_DIR / client_uuid
     client_dir.mkdir(exist_ok=True)
