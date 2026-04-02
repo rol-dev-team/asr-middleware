@@ -38,7 +38,7 @@ async def create_full_analysis_pipeline(
     session: AsyncSession = Depends(get_session)
 ):
     # 1. Basic File Validation & Storage
-    if not file.content_type.startswith("audio/"):
+    if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=400, detail="File must be audio")
     
     contents = await file.read()
