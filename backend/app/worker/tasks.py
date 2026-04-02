@@ -235,11 +235,13 @@ def task_analyze_meeting(analysis_id: str, audio_translation_id: str, generate_m
 @celery_app.task(name="task_full_meeting_pipeline")
 def task_full_meeting_pipeline(audio_id: str, translation_id: str, analysis_id: str, file_path: str, mime_type: str, generate_markdown: bool):
     db = SessionLocal()
+    uploaded_gemini_file_name = None
     try:
         # --- STEP 1: TRANSCRIBE ---
         logger.info(f"Pipeline Step 1: Transcribing {audio_id}")
         with open(file_path, 'rb') as f:
             audio_file = client.files.upload(file=f, config={'mime_type': mime_type})
+            uploaded_gemini_file_name = audio_file.name
             while audio_file.state.name == "PROCESSING":
                 import time
                 time.sleep(2)
@@ -382,7 +384,6 @@ After the translation, on a new line, also provide your confidence score (0.0 to
         analysis_rec.notes_markdown = notes_md
         db.commit()
 
-        client.files.delete(name=audio_file.name)
         logger.info("Full Pipeline Completed Successfully")
 
     except Exception as e:
@@ -391,3 +392,8 @@ After the translation, on a new line, also provide your confidence score (0.0 to
         raise e
     finally:
         db.close()
+        if uploaded_gemini_file_name:
+            try:
+                client.files.delete(name=uploaded_gemini_file_name)
+            except Exception as cleanup_err:
+                logger.warning(f"Failed to delete Gemini file {uploaded_gemini_file_name}: {cleanup_err}")
