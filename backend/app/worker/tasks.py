@@ -271,6 +271,10 @@ def task_full_meeting_pipeline(audio_id: str, translation_id: str, analysis_id: 
         
         # Update Transcription Record
         audio_rec = db.query(AudioTranscription).filter(AudioTranscription.id == uuid.UUID(audio_id)).first()
+        if audio_rec is None:
+            logger.error(f"AudioTranscription record not found for id={audio_id} in task_full_meeting_pipeline")
+            db.rollback()
+            raise ValueError(f"AudioTranscription record not found for id={audio_id}")
         audio_rec.transcription_text = transcription_text
         db.commit()
 
