@@ -92,7 +92,7 @@ class AudioTranslation(SQLModel, table=True):
 
 class AudioTranslationCreate(SQLModel):
     audio_transcription_id: uuid.UUID
-    source_text: str
+    # source_text: str
 
 
 class AudioTranslationPublic(SQLModel):
@@ -108,13 +108,13 @@ class AudioTranslationPublic(SQLModel):
 class MeetingAnalysis(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
     audio_translation_id: uuid.UUID = Field(foreign_key="audiotranslation.id")
-    content_text: str  # The text that was analyzed (from translation)
+    content_text: Optional[str] = None
     user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="user.id")
     
     # Analysis components
-    summary: str  # Brief summary of the meeting/content
-    business_insights: str  # Business-focused analysis
-    technical_insights: str  # Technical analysis
+    summary: Optional[str] = None  # Brief summary of the meeting/content
+    business_insights: Optional[str] = None  # Business-focused analysis
+    technical_insights: Optional[str] = None  # Technical analysis
     action_items: Optional[str] = None  # Extracted action items
     key_topics: Optional[str] = None  # Main topics discussed
     
@@ -133,15 +133,21 @@ class MeetingAnalysisCreate(SQLModel):
 class MeetingAnalysisPublic(SQLModel):
     id: uuid.UUID
     audio_translation_id: uuid.UUID
-    content_text: str
-    summary: str
-    business_insights: str
-    technical_insights: str
+    content_text: Optional[str]
+    summary: Optional[str]
+    business_insights: Optional[str]
+    technical_insights: Optional[str]
     action_items: Optional[str]
     key_topics: Optional[str]
     notes_markdown: Optional[str]
     model_used: str
     created_at: datetime
+
+
+class FullPipeline(SQLModel):
+    transcription_id: uuid.UUID
+    translation_id: uuid.UUID
+    analysis_id: uuid.UUID
 
 
 class UserStatusUpdate(SQLModel):

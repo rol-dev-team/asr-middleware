@@ -61,57 +61,39 @@ async def transcribe_audio(
     # Create client-specific directory
     client_dir = MEDIA_DIR / client_uuid
     client_dir.mkdir(exist_ok=True)
-    
     file_path = client_dir / unique_filename
     
-    # Save the uploaded file
+    # 1. Save locally
     try:
         contents = await file.read()
         with open(file_path, "wb") as f:
             f.write(contents)
-        file_size = len(contents)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
     
-    # Upload to Google's servers and transcribe
-    try:
-        print(f"Uploading file to Google: {file_path}...")
-        with open(file_path, 'rb') as f:
-            audio_file = client.files.upload(file=f, config={'mime_type': file.content_type})
-        
-        print("Transcribing...")
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                types.Part.from_uri(file_uri=audio_file.uri, mime_type=audio_file.mime_type),
-                "You are an expert transcriber. The audio contains a mix of Bangla and English. "
-                "Transcribe the audio exactly as spoken but use the Roman alphabet (Banglish). "
-                "Example: 'Amra ajke meeting korsi'. Please transcribe this audio into Banglish text."
-                "Identify the different speakers and label them as 'Speaker 1', 'Speaker 2', etc. Include timestamps for whenever the speaker changes."
-            ]
-        )
-        
-        transcription_text = response.text
-        
-    except Exception as e:
-        # Clean up file if transcription fails
-        if file_path.exists():
-            os.remove(file_path)
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
-    
-    # Create database record
+
+    # 2. Create DB record with EMPTY transcription_text
     audio_transcription = AudioTranscription(
+        id=uuid.uuid4(), # Explicitly generate ID to pass to task
         filename=unique_filename,
         original_filename=file.filename,
-        file_size=file_size,
+        file_size=len(contents),
         mime_type=file.content_type,
-        transcription_text=transcription_text,
+        transcription_text=None, # Will be filled by worker
         user_id=current_user.id
     )
     
     session.add(audio_transcription)
     await session.commit()
     await session.refresh(audio_transcription)
+    
+    # 3. Trigger Background Task
+    from app.worker.tasks import task_transcribe_audio
+    task_transcribe_audio.delay(
+        str(audio_transcription.id), 
+        str(file_path), 
+        file.content_type
+    )
     
     return audio_transcription
 
@@ -139,127 +121,38 @@ async def create_meeting_analysis(
     analysis_data: MeetingAnalysisCreate,
     session: AsyncSession = Depends(get_session)
 ):
-    """
-    Generate comprehensive business and technical analysis from audio translation.
-    Similar to Fireflies.ai analysis - extracts insights, action items, and can generate markdown notes.
-    """
-    # Verify the audio translation exists
-    statement = select(AudioTranslation).where(AudioTranslation.user_id == current_user.id, AudioTranslation.id == analysis_data.audio_translation_id)
-    result = await session.exec(statement)
-    translation = result.all()
-    
-    if not translation:
-        raise HTTPException(status_code=404, detail="Audio translation not found")
-    
-    content_text = translation[0].translated_text
-    
-    if not content_text:
-        raise HTTPException(status_code=400, detail="No translated text available to analyze")
-    
-    # Generate analysis using Gemini API
-    try:
-        print("Generating business and technical analysis...")
-        
-        analysis_prompt = f"""You are an expert meeting analyst. Analyze the following meeting transcript and provide:
-
-1. **SUMMARY**: A brief 2-3 sentence summary of the meeting
-2. **BUSINESS INSIGHTS**: Key business implications, decisions, goals, and strategic points
-3. **TECHNICAL INSIGHTS**: Technical discussions, implementation details, technologies mentioned, and technical decisions
-4. **ACTION ITEMS**: Specific tasks, assignments, and follow-ups mentioned (if any)
-5. **KEY TOPICS**: Main topics and themes discussed
-
-Transcript:
-{content_text}
-
-Provide your response in this exact format:
-
-SUMMARY:
-[Your summary here]
-
-BUSINESS_INSIGHTS:
-[Your business insights here]
-
-TECHNICAL_INSIGHTS:
-[Your technical insights here]
-
-ACTION_ITEMS:
-[Your action items here, or 'None identified' if there are none]
-
-KEY_TOPICS:
-[Your key topics here]
-"""
-        
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[analysis_prompt]
-        )
-        
-        response_text = response.text.strip()
-        
-        # Parse the response
-        def extract_section(text: str, section_name: str) -> str:
-            import re
-            pattern = rf"{section_name}:\s*(.+?)(?=\n[A-Z_]+:|$)"
-            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
-            return "Not available"
-        
-        summary = extract_section(response_text, "SUMMARY")
-        business_insights = extract_section(response_text, "BUSINESS_INSIGHTS")
-        technical_insights = extract_section(response_text, "TECHNICAL_INSIGHTS")
-        action_items = extract_section(response_text, "ACTION_ITEMS")
-        key_topics = extract_section(response_text, "KEY_TOPICS")
-        
-        # Generate markdown notes if requested
-        notes_markdown = None
-        if analysis_data.generate_markdown:
-            print("Generating markdown notes...")
-            current_date = datetime.utcnow().strftime("%B %d, %Y")
-            markdown_prompt = f"""Convert the following meeting analysis into a professional markdown document.
-
-Meeting Date: {current_date}
-Meeting Content: {content_text}
-
-Analysis:
-- Summary: {summary}
-- Business Insights: {business_insights}
-- Technical Insights: {technical_insights}
-- Action Items: {action_items}
-- Key Topics: {key_topics}
-
-Create a well-formatted markdown document with proper headings, bullet points, and sections.
-Use the provided date ({current_date}) in your document and organize information clearly."""
-            
-            markdown_response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[markdown_prompt]
-            )
-            notes_markdown = markdown_response.text.strip()
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis generation failed: {str(e)}")
-    
-    # Create database record
-    analysis = MeetingAnalysis(
-        audio_translation_id=analysis_data.audio_translation_id,
-        content_text=content_text,
-        summary=summary,
-        user_id=current_user.id,
-        business_insights=business_insights,
-        technical_insights=technical_insights,
-        action_items=action_items if action_items != "Not available" else None,
-        key_topics=key_topics if key_topics != "Not available" else None,
-        notes_markdown=notes_markdown,
-        model_used="gemini-2.5-flash"
+    # 1. Quick check if translation exists (Async)
+    statement = select(AudioTranslation).where(
+        AudioTranslation.user_id == current_user.id, 
+        AudioTranslation.id == analysis_data.audio_translation_id
     )
-    
-    session.add(analysis)
-    await session.commit()
-    await session.refresh(analysis)
-    
-    return analysis
+    result = await session.exec(statement)
+    if not result.first():
+        raise HTTPException(status_code=404, detail="Audio translation not found")
 
+    # 2. Create the record in 'Pending' state
+    new_analysis = MeetingAnalysis(
+        audio_translation_id=analysis_data.audio_translation_id,
+        user_id=current_user.id,
+        model_used="gemini-2.5-flash",
+        summary="Processing...",  # Placeholder
+        content_text="Processing...",  # Placeholder to satisfy MeetingAnalysisPublic
+        business_insights="Processing...",  # Placeholder to satisfy MeetingAnalysisPublic
+        technical_insights="Processing..."  # Placeholder to satisfy MeetingAnalysisPublic
+    )
+    session.add(new_analysis)
+    await session.commit()
+    await session.refresh(new_analysis)
+
+    # 3. Trigger Celery
+    from app.worker.tasks import task_analyze_meeting
+    task_analyze_meeting.delay(
+        str(new_analysis.id), 
+        str(analysis_data.audio_translation_id), 
+        analysis_data.generate_markdown
+    )
+
+    return new_analysis
 
 @router.get("/analyses", response_model=List[MeetingAnalysisPublic])
 async def get_all_analyses(

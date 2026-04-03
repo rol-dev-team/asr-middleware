@@ -4,16 +4,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import create_async_engine
 from typing import AsyncGenerator
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("ASYNC_DATABASE_URL")
 
-engine = AsyncEngine(create_engine(DATABASE_URL, echo=True, future=True))
+engine = create_async_engine(DATABASE_URL, echo=True, future=True)
 
 async def init_db():
     async with engine.begin() as conn:
