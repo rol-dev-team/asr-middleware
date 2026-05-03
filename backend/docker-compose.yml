@@ -22,6 +22,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis broker for Celery
+  redis:
+    image: redis:7-alpine
+    container_name: asr-middleware-redis
+    networks:
+      - asr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Backend API service
   backend:
     build:
@@ -32,6 +45,8 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
+      - REDIS_URL=redis://redis:6379/0
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
@@ -41,6 +56,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs').read()"]
@@ -48,6 +65,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Celery worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: asr-middleware-worker
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - SYNC_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info"]
+    volumes:
+      - ./media:/app/media
+    networks:
+      - asr-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      disable: true
 
 volumes:
   postgres_data:
