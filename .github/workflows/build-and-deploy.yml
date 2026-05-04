@@ -94,18 +94,19 @@ jobs:
             ENVEOF
             chmod 600 .env
 
-            # Pull latest image
+            # Pull latest backend image
             docker pull "$IMAGE_NAME:latest"
 
-            # Stop and remove ONLY backend + worker — db and redis keep running
-            docker rm -f asr-middleware-backend asr-middleware-worker 2>/dev/null || true
+            # Stop ALL four containers so compose can take full ownership
+            # db and redis will restart immediately via compose (data volume safe)
+            docker rm -f asr-middleware-backend asr-middleware-worker asr-middleware-redis asr-middleware-db 2>/dev/null || true
 
-            # Bring up full stack — db/redis untouched, backend/worker recreated fresh
+            # Bring up full stack under this compose project
             IMAGE_NAME="$IMAGE_NAME" docker compose -f "$DEPLOY_COMPOSE" up -d \
               --pull missing \
               --remove-orphans
 
-            # Wait for backend healthcheck (migrations run inside entrypoint.sh first)
+            # Wait for backend (entrypoint runs alembic upgrade head first)
             echo "==> Waiting for asr-middleware-backend to become healthy..."
             for i in $(seq 1 30); do
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' asr-middleware-backend 2>/dev/null || echo "starting")
