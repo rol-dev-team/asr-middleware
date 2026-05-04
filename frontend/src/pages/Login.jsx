@@ -64,29 +64,35 @@ const Login = ({ onLogin }) => {
   const [searchParams] = useSearchParams();
 
  useEffect(() => {
-    const accessToken = searchParams.get("access_token");
-    const refreshToken = searchParams.get("refresh_token");
+  const accessToken = searchParams.get("access_token");
+  const refreshToken = searchParams.get("refresh_token");
 
-    if (accessToken && refreshToken) {
-      ssoHandoff(accessToken, refreshToken);
+  if (accessToken && refreshToken) {
+    ssoHandoff(accessToken, refreshToken);
 
-      const taskId = searchParams.get("task_id") || null;
-      const clientName = searchParams.get("client_name") || null;
+    const taskId = searchParams.get("task_id") || null;
+    const clientName = searchParams.get("client") || null;
 
-      getCurrentUser()
-        .then((userInfo) => {
-          onLogin(userInfo);
-          navigate("/", {
-            state: { taskId, clientName },
-            replace: true,
-          });
-        })
-        .catch(() => {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
+    console.log("SSO params — task_id:", taskId, "client:", clientName);
+
+    // Store in sessionStorage as backup
+    if (taskId) sessionStorage.setItem("crm_task_id", taskId);
+    if (clientName) sessionStorage.setItem("crm_client_name", clientName);
+
+    getCurrentUser()
+      .then((userInfo) => {
+        onLogin(userInfo);
+        navigate("/", {
+          state: { taskId, clientName },
+          replace: true,
         });
-    }
-  }, []);
+      })
+      .catch(() => {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+      });
+  }
+}, []);
 
   return (
     <div className="relative min-h-screen bg-background flex items-center justify-center overflow-hidden">
