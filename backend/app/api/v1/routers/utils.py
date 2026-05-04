@@ -37,7 +37,7 @@ async def create_full_analysis_pipeline(
     title: str = "Untitled",
     generate_markdown: bool = True,
     session: AsyncSession = Depends(get_session),
-    meeting_id: uuid.UUID = None
+    meeting_id: uuid.UUID | None = None
 ):
     # 1. Basic File Validation & Storage
     if not file.content_type or not file.content_type.startswith("audio/"):
