@@ -194,7 +194,7 @@ async def get_analysis_by_id(
     return analysis[0]
 
 
-@router.get("/analyses/{meeting_id}", response_model=MeetingAnalysisPublic)
+@router.get("/analyses/meetings/{meeting_id}", response_model=MeetingAnalysisPublic)
 async def get_analysis_by_meeting_id(
     current_user: Annotated[User, Depends(get_current_active_user)],
     meeting_id: uuid.UUID,
