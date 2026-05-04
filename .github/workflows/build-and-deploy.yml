@@ -5,7 +5,8 @@ on:
     branches:
       - main
     paths:
-      - '**'
+      - 'backend/**'
+      - 'docker-compose.deploy.yml'
   workflow_dispatch:
 
 env:
@@ -34,8 +35,8 @@ jobs:
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./backend          # ← build context is backend/
+          file: ./backend/Dockerfile  # ← Dockerfile is inside backend/
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
@@ -49,7 +50,8 @@ jobs:
       - name: Encode compose file
         id: encode
         run: |
-          echo "compose_b64=$(base64 -w 0 ${{ env.DEPLOY_COMPOSE }})" >> $GITHUB_OUTPUT
+          # docker-compose.deploy.yml is at repo root
+          echo "compose_b64=$(base64 -w 0 docker-compose.deploy.yml)" >> $GITHUB_OUTPUT
 
   deploy:
     runs-on: ubuntu-latest
@@ -110,7 +112,7 @@ jobs:
               --pull missing \
               --remove-orphans
 
-            # Wait for backend (entrypoint runs alembic upgrade head first)
+            # Wait for backend (entrypoint.sh runs alembic upgrade head first)
             echo "==> Waiting for asr-middleware-backend to become healthy..."
             for i in $(seq 1 30); do
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' asr-middleware-backend 2>/dev/null || echo "starting")
