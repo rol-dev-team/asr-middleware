@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import logo from "@/assets/kothalipi_logo.png";
-import { loginUser, getCurrentUser, logoutUser } from "@/api/authApi";
+import { loginUser, ssoHandoff, getCurrentUser, logoutUser } from "@/api/authApi";
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState("");
@@ -57,6 +59,29 @@ const Login = ({ onLogin }) => {
     }
   };
 
+
+  //for crm
+  const [searchParams] = useSearchParams();
+
+useEffect(() => {
+  const accessToken = searchParams.get("access_token");
+  const refreshToken = searchParams.get("refresh_token");
+
+  if (accessToken && refreshToken) {
+    ssoHandoff(accessToken, refreshToken);
+
+    getCurrentUser()
+      .then((userInfo) => {
+        onLogin(userInfo);
+        navigate("/");
+      })
+      .catch(() => {
+        // Tokens were invalid — just show normal login
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+      });
+  }
+}, []);
   return (
     <div className="relative min-h-screen bg-background flex items-center justify-center overflow-hidden">
       <div className="pointer-events-none absolute inset-0">

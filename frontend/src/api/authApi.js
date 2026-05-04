@@ -73,3 +73,11 @@ export const getCurrentUser = async () => {
   const { data } = await axiosInstance.get(`${AUTH_PREFIX}/users/me`);
   return data;
 };
+
+/**
+ * SSO handoff — store tokens coming from URL params (e.g. from CRM redirect)
+ */
+export const ssoHandoff = (accessToken, refreshToken) => {
+  localStorage.setItem("access_token", accessToken);
+  localStorage.setItem("refresh_token", refreshToken);
+};
