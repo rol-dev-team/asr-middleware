@@ -106,8 +106,8 @@ jobs:
             done
 
             # Read DB credentials from .env without sourcing it (safer with arbitrary secret characters)
-            DB_USER=$(grep -E '^DB_USER=' .env | head -n1 | cut -d= -f2-)
-            DB_PASSWORD=$(grep -E '^DB_PASSWORD=' .env | head -n1 | cut -d= -f2-)
+            DB_USER=$(grep -E '^DB_USER=' .env | head -n1 | cut -d= -f2- | tr -d '\r')
+            DB_PASSWORD=$(grep -E '^DB_PASSWORD=' .env | head -n1 | cut -d= -f2- | tr -d '\r')
             if [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
               echo "==> ERROR: DB_USER/DB_PASSWORD missing in .env"
               exit 1
@@ -149,11 +149,11 @@ jobs:
             fi
 
             echo "==> Syncing Postgres role password with current .env (persistent volume safe)..."
+            DB_USER_SQL=$(printf "%s" "$DB_USER" | sed 's/"/""/g')
+            DB_PASSWORD_SQL=$(printf "%s" "$DB_PASSWORD" | sed "s/'/''/g")
             docker exec asr-middleware-db \
               psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d postgres \
-                -v target_role="$DB_USER" \
-                -v target_password="$DB_PASSWORD" \
-                -c "ALTER ROLE :\"target_role\" WITH PASSWORD :'target_password';"
+                -c "ALTER ROLE \"$DB_USER_SQL\" WITH PASSWORD '$DB_PASSWORD_SQL';"
 
             # Bring up application services under this compose project
             IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$DEPLOY_COMPOSE" up -d \
