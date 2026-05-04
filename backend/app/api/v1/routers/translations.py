@@ -37,7 +37,8 @@ MEDIA_DIR.mkdir(exist_ok=True)
 async def translate_banglish_to_english(
     current_user: Annotated[User, Depends(get_current_active_user)],
     translation_data: AudioTranslationCreate,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
+    meeting_id: uuid.UUID = None
 ):
     """
     Translate Banglish text to pure English.

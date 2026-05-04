@@ -39,7 +39,8 @@ async def transcribe_audio(
     current_user: Annotated[User, Depends(get_current_active_user)],
     file: UploadFile = File(...),
     title: str = "Untitled",
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
+    meeting_id: uuid.UUID = None
 ):
     """
     Upload an audio file and transcribe it to Banglish (Bangla in Roman alphabet).
@@ -75,6 +76,7 @@ async def transcribe_audio(
     # 2. Create DB record with EMPTY transcription_text
     audio_transcription = AudioTranscription(
         id=uuid.uuid4(), # Explicitly generate ID to pass to task
+        meeting_id=meeting_id,
         filename=unique_filename,
         original_filename=file.filename,
         file_size=len(contents),
@@ -119,7 +121,8 @@ async def get_all_audios(
 async def create_meeting_analysis(
     current_user: Annotated[User, Depends(get_current_active_user)],
     analysis_data: MeetingAnalysisCreate,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
+    meeting_id: uuid.UUID = None
 ):
     # 1. Quick check if translation exists (Async)
     statement = select(AudioTranslation).where(
@@ -133,6 +136,7 @@ async def create_meeting_analysis(
     # 2. Create the record in 'Pending' state
     new_analysis = MeetingAnalysis(
         audio_translation_id=analysis_data.audio_translation_id,
+        meeting_id=meeting_id,
         user_id=current_user.id,
         model_used="gemini-2.5-flash",
         summary="Processing...",  # Placeholder
@@ -185,6 +189,24 @@ async def get_analysis_by_id(
     result = await session.exec(statement)
     analysis = result.all()
     
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Meeting analysis not found")
+    return analysis[0]
+
+
+@router.get("/analyses/{meeting_id}", response_model=MeetingAnalysisPublic)
+async def get_analysis_by_meeting_id(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    meeting_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Retrieve a specific meeting analysis by its meeting ID.
+    """
+    statement = select(MeetingAnalysis).where(MeetingAnalysis.user_id == current_user.id, MeetingAnalysis.meeting_id == meeting_id)
+    result = await session.exec(statement)
+    analysis = result.all()
+
     if not analysis:
         raise HTTPException(status_code=404, detail="Meeting analysis not found")
     return analysis[0]
