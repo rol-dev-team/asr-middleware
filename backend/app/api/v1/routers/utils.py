@@ -36,7 +36,8 @@ async def create_full_analysis_pipeline(
     file: UploadFile = File(...),
     title: str = "Untitled",
     generate_markdown: bool = True,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
+    meeting_id: uuid.UUID | None = None
 ):
     # 1. Basic File Validation & Storage
     if not file.content_type or not file.content_type.startswith("audio/"):
@@ -58,6 +59,7 @@ async def create_full_analysis_pipeline(
     # A. Transcription
     audio_transcription = AudioTranscription(
         id=uuid.uuid4(),
+        meeting_id=meeting_id,
         filename=unique_filename,
         original_filename=file.filename,
         file_size=len(contents),
@@ -69,6 +71,7 @@ async def create_full_analysis_pipeline(
     # B. Translation
     audio_translation = AudioTranslation(
         id=uuid.uuid4(),
+        meeting_id=meeting_id,
         audio_transcription_id=audio_transcription.id,
         source_text="Waiting for transcription...",
         translated_text="Processing...",
@@ -79,6 +82,7 @@ async def create_full_analysis_pipeline(
     meeting_analysis = MeetingAnalysis(
         id=uuid.uuid4(),
         audio_translation_id=audio_translation.id,
+        meeting_id=meeting_id,
         user_id=current_user.id,
         summary="Processing..."
     )

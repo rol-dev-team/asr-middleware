@@ -4,7 +4,7 @@ from sqlmodel import select
 from app.api.db import get_session
 from app.api.v1.deps import get_current_active_user
 from app.api.models import User
-from typing import Annotated
+from typing import Annotated, List, Optional
 from app.api.models import (
     AudioTranscription, 
     AudioTranslation,
@@ -17,7 +17,6 @@ from google import genai
 import os
 import uuid
 from pathlib import Path
-from typing import List
 import re
 
 router = APIRouter(
@@ -37,7 +36,7 @@ MEDIA_DIR.mkdir(exist_ok=True)
 async def translate_banglish_to_english(
     current_user: Annotated[User, Depends(get_current_active_user)],
     translation_data: AudioTranslationCreate,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
 ):
     """
     Translate Banglish text to pure English.
@@ -58,10 +57,11 @@ async def translate_banglish_to_english(
     if not source_text:
         raise HTTPException(status_code=400, detail="No text available to translate")
     
-    # Create record
+    # Create record, inheriting meeting_id from the parent transcription
     translation = AudioTranslation(
         id=uuid.uuid4(),
         audio_transcription_id=translation_data.audio_transcription_id,
+        meeting_id=audio[0].meeting_id,
         source_text=source_text,
         translated_text="Processing...", # Placeholder
         user_id=current_user.id,
