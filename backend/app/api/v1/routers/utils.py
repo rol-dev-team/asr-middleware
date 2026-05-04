@@ -38,9 +38,7 @@ async def create_full_analysis_pipeline(
     generate_markdown: bool = True,
     session: AsyncSession = Depends(get_session),
     task_id: str | None = None,
-    is_crm: bool = False
 ):
-    if is_crm:
     # 1. Basic File Validation & Storage
     if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=400, detail="File must be audio")
