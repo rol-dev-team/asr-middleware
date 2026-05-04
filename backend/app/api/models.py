@@ -54,6 +54,7 @@ class TokenBlacklist(SQLModel, table=True):
 
 class AudioTranscription(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    meeting_id: Optional[uuid.UUID] = Field(default=None, max_length=100)
     filename: str = Field(max_length=255)
     original_filename: str = Field(max_length=255)
     file_size: int
@@ -65,11 +66,13 @@ class AudioTranscription(SQLModel, table=True):
 
 
 class AudioTranscriptionCreate(SQLModel):
+    meeting_id: Optional[uuid.UUID] = Field(default=None, max_length=100)
     pass  # File will be uploaded via multipart form
 
 
 class AudioTranscriptionPublic(SQLModel):
     id: uuid.UUID
+    meeting_id: Optional[uuid.UUID]
     filename: str
     original_filename: str
     file_size: int
@@ -81,6 +84,7 @@ class AudioTranscriptionPublic(SQLModel):
 
 class AudioTranslation(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    meeting_id: Optional[uuid.UUID] = Field(default=None, max_length=100)
     audio_transcription_id: uuid.UUID = Field(foreign_key="audiotranscription.id")
     source_text: str  # Banglish text
     translated_text: str  # Pure English text
@@ -91,12 +95,14 @@ class AudioTranslation(SQLModel, table=True):
 
 
 class AudioTranslationCreate(SQLModel):
+    meeting_id: Optional[uuid.UUID] = Field(default=None, max_length=100)
     audio_transcription_id: uuid.UUID
     # source_text: str
 
 
 class AudioTranslationPublic(SQLModel):
     id: uuid.UUID
+    meeting_id: Optional[uuid.UUID]
     audio_transcription_id: uuid.UUID
     source_text: str
     translated_text: str
@@ -108,6 +114,7 @@ class AudioTranslationPublic(SQLModel):
 class MeetingAnalysis(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
     audio_translation_id: uuid.UUID = Field(foreign_key="audiotranslation.id")
+    meeting_id: Optional[uuid.UUID] = Field(default=None, max_length=100)
     content_text: Optional[str] = None
     user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="user.id")
     
@@ -127,11 +134,13 @@ class MeetingAnalysis(SQLModel, table=True):
 
 class MeetingAnalysisCreate(SQLModel):
     audio_translation_id: uuid.UUID
+    meeting_id: Optional[uuid.UUID] = Field(default=None, max_length=100)
     generate_markdown: bool = True  # Whether to generate MD notes
 
 
 class MeetingAnalysisPublic(SQLModel):
     id: uuid.UUID
+    meeting_id: Optional[uuid.UUID] = Field(default=None, max_length=100)
     audio_translation_id: uuid.UUID
     content_text: Optional[str]
     summary: Optional[str]
