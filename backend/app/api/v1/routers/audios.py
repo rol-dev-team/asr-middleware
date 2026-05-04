@@ -122,7 +122,6 @@ async def create_meeting_analysis(
     current_user: Annotated[User, Depends(get_current_active_user)],
     analysis_data: MeetingAnalysisCreate,
     session: AsyncSession = Depends(get_session),
-    meeting_id: uuid.UUID = None
 ):
     # 1. Quick check if translation exists (Async)
     statement = select(AudioTranslation).where(
@@ -136,7 +135,7 @@ async def create_meeting_analysis(
     # 2. Create the record in 'Pending' state
     new_analysis = MeetingAnalysis(
         audio_translation_id=analysis_data.audio_translation_id,
-        meeting_id=meeting_id,
+        meeting_id=analysis_data.meeting_id,
         user_id=current_user.id,
         model_used="gemini-2.5-flash",
         summary="Processing...",  # Placeholder
