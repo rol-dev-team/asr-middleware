@@ -5,52 +5,58 @@
 ```bash
 # 1. Setup environment files
 cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
 
 # 2. Edit backend/.env with your values
-# Required: DATABASE_URL, GEMINI_API_KEY, SECRET_KEY
+# Required: GEMINI_API_KEY, SECRET_KEY
 
-# 3. Deploy
-docker-compose up -d --build
+# 3. Start backend stack (db + redis + backend + worker)
+# Recommended (runs backend/docker-compose.yml and uses backend/.env automatically):
+cd backend
+docker compose up -d --build
+
+# Alternative (run from repo root and point Compose at backend/.env for variable substitution):
+# docker compose --env-file backend/.env up -d --build
 
 # 4. Run migrations
-docker-compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 
 # 5. Access
-# Frontend: http://localhost
-# API Docs: http://localhost/api/docs
+# API Docs: http://localhost:8000/docs
+# Health:   http://localhost:8000/health
 ```
+
+If you want the full stack (frontend + nginx reverse proxy), use `docker-compose.prod.yml` / `docker-compose.deploy.yml` instead.
 
 ## 🐳 Docker Commands
 
 ### Deployment
 ```bash
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # Start with rebuild
-docker-compose up -d --build
+docker compose up -d --build
 
 # Stop all services
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (deletes data!)
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Monitoring
 ```bash
 # View all logs
-docker-compose logs -f
+docker compose logs -f
 
 # View specific service logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
-docker-compose logs -f nginx
-docker-compose logs -f db
+docker compose logs -f backend
+docker compose logs -f worker
+docker compose logs -f db
+docker compose logs -f redis
 
 # Check service status
-docker-compose ps
+docker compose ps
 
 # Check resource usage
 docker stats
@@ -59,23 +65,23 @@ docker stats
 ### Management
 ```bash
 # Restart a service
-docker-compose restart backend
+docker compose restart backend
 
 # Execute command in container
-docker-compose exec backend bash
-docker-compose exec backend python
+docker compose exec backend bash
+docker compose exec backend python
 
 # Run migrations
-docker-compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 
 # Create new migration
-docker-compose exec backend alembic revision --autogenerate -m "description"
+docker compose exec backend alembic revision --autogenerate -m "description"
 ```
 
 ### Database
 ```bash
 # Backup database
-docker-compose exec -T db pg_dump -U postgres ASRMiddleware > backup.sql
+docker compose exec -T db pg_dump -U postgres ASRMiddleware > backup.sql
 
 # Restore database
 docker-compose exec -T db psql -U postgres ASRMiddleware < backup.sql

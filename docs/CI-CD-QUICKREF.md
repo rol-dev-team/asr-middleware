@@ -8,8 +8,8 @@
 - [ ] Generate DockerHub access token
 - [ ] Add GitHub Secrets (8 secrets total)
 - [ ] Setup SSH key for VM access
-- [ ] Copy `.env.example` to `.env` on VM
-- [ ] Run initial deployment on VM
+- [ ] Ensure Docker + Docker Compose v2 installed on VM
+- [ ] Confirm the workflow can create the deployment directory on VM
 
 ### GitHub Secrets Required
 
@@ -17,10 +17,21 @@
 DOCKERHUB_USERNAME      # Your DockerHub username
 DOCKERHUB_TOKEN         # DockerHub access token
 VM_HOST                 # VM IP or hostname
-VM_USERNAME             # SSH username
+VM_USER                 # SSH username
 VM_SSH_KEY              # Private SSH key content
-VM_SSH_PORT             # SSH port (optional, default: 22)
-VM_DEPLOY_PATH          # Project path on VM
+VM_PORT                 # SSH port (e.g. 22)
+
+# App secrets written into VM .env during deploy
+DB_USER
+DB_PASSWORD
+DB_NAME
+DB_PORT
+GEMINI_API_KEY
+SECRET_KEY
+ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_DAYS
+BACKEND_PORT
 ```
 
 ## Common Commands
@@ -28,33 +39,23 @@ VM_DEPLOY_PATH          # Project path on VM
 ### On VM Server
 
 ```bash
-# Initial setup
-cd /home/ubuntu/asr-middleware
-cp .env.example .env
-# Edit .env with your values
-chmod +x scripts/vm-deploy.sh
-
-# First deployment
-docker-compose -f docker-compose.prod.yml up -d
-docker-compose -f docker-compose.prod.yml exec backend alembic upgrade head
-
-# Manual deployment
-./scripts/vm-deploy.sh
+# The GitHub Action deploys using docker-compose.deploy.yml
+# and creates/overwrites .env in the deploy directory.
 
 # View logs
-docker-compose -f docker-compose.prod.yml logs -f
+docker compose -f docker-compose.deploy.yml logs -f
 
 # Check status
-docker-compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.deploy.yml ps
 
-# Restart service
-docker-compose -f docker-compose.prod.yml restart backend
+# DB data persists in the postgres_data volume
+docker volume ls | grep postgres_data
 
-# Run migrations
-docker-compose -f docker-compose.prod.yml exec backend alembic upgrade head
+# Run migrations manually (usually automatic on backend container start)
+docker compose -f docker-compose.deploy.yml exec backend alembic upgrade head
 
 # Database backup
-docker-compose -f docker-compose.prod.yml exec -T db pg_dump -U postgres ASRMiddleware | gzip > backup.sql.gz
+docker compose -f docker-compose.deploy.yml exec -T db pg_dump -U postgres ASRMiddleware | gzip > backup.sql.gz
 ```
 
 ### From Local Machine
@@ -83,11 +84,10 @@ ssh user@vm-ip "docker ps"
 
 | File | Purpose |
 |------|---------|
-| `.github/workflows/deploy.yml` | GitHub Actions workflow |
-| `scripts/vm-deploy.sh` | VM deployment script |
-| `docker-compose.prod.yml` | Production docker config |
-| `docker-compose.yml` | Development docker config |
-| `.env` | Environment variables (VM only) |
+| `.github/workflows/build-and-deploy.yml` | GitHub Actions build + deploy workflow |
+| `docker-compose.deploy.yml` | VM deploy compose (db + redis + backend + worker) |
+| `backend/entrypoint.sh` | Runs `alembic upgrade head` then starts Uvicorn |
+| `backend/docker-compose.yml` | Backend-only local compose (run from `backend/`) |
 
 ## Troubleshooting Quick Fixes
 
@@ -103,16 +103,17 @@ ssh user@vm-ip "docker ps"
 # Deployment fails at SSH
 → Test: ssh -i ~/.ssh/key user@vm-ip
 → Verify VM_SSH_KEY secret has full key including headers
-→ Check VM_HOST, VM_USERNAME, VM_DEPLOY_PATH
+→ Check VM_HOST, VM_USER, VM_PORT
 
 # Deployment fails at migration
-→ docker-compose -f docker-compose.prod.yml exec backend alembic current
+→ docker compose -f docker-compose.deploy.yml logs --tail 200 backend
+→ docker compose -f docker-compose.deploy.yml exec backend alembic current
 → Check database connection
 → Review backend logs
 
 # Service won't start
-→ docker-compose -f docker-compose.prod.yml logs backend
-→ Check .env file exists and is correct
+→ docker compose -f docker-compose.deploy.yml logs backend
+→ Check DB credentials and volume state
 → Verify disk space: df -h
 ```
 

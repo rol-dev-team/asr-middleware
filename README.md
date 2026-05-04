@@ -21,12 +21,13 @@ See [QUICKSTART.md](./docs/QUICKSTART.md) for detailed setup instructions.
 git clone <repository-url>
 cd asr-middleware
 
-# Start services
-docker-compose up --build
+# Start backend stack (db + redis + backend + worker)
+cd backend
+docker compose up -d --build
 
 # Access the application
-# Frontend: http://localhost
-# Backend API: http://localhost/api/docs
+# Backend API Docs: http://localhost:8000/docs
+# Backend Health:   http://localhost:8000/health
 ```
 
 ### Production Deployment

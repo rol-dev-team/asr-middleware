@@ -12,6 +12,7 @@ on:
 
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/asr-middleware-backend
+  IMAGE_TAG: sha-${{ github.sha }}
   APP_DIR: /home/itbilling/Projects/asr-middleware
   DEPLOY_COMPOSE: docker-compose.deploy.yml
 
@@ -72,7 +73,7 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           port: ${{ secrets.VM_PORT }}
-          envs: IMAGE_NAME,APP_DIR,DEPLOY_COMPOSE,COMPOSE_B64
+          envs: IMAGE_NAME,IMAGE_TAG,APP_DIR,DEPLOY_COMPOSE,COMPOSE_B64
           script: |
             set -e
             mkdir -p "$APP_DIR"
@@ -96,8 +97,24 @@ jobs:
             ENVEOF
             chmod 600 .env
 
-            # Pull latest backend image
-            docker pull "$IMAGE_NAME:latest"
+            # Fail fast if required env vars are missing (prevents confusing runtime failures)
+            for k in DB_USER DB_PASSWORD DB_NAME DB_PORT GEMINI_API_KEY SECRET_KEY ALGORITHM ACCESS_TOKEN_EXPIRE_MINUTES REFRESH_TOKEN_EXPIRE_DAYS BACKEND_PORT; do
+              if ! grep -q "^${k}=" .env; then
+                echo "==> ERROR: Missing ${k} in generated .env"
+                exit 1
+              fi
+            done
+
+            # Read DB credentials from .env without sourcing it (safer with arbitrary secret characters)
+            DB_USER=$(grep -E '^DB_USER=' .env | head -n1 | cut -d= -f2-)
+            DB_PASSWORD=$(grep -E '^DB_PASSWORD=' .env | head -n1 | cut -d= -f2-)
+            if [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
+              echo "==> ERROR: DB_USER/DB_PASSWORD missing in .env"
+              exit 1
+            fi
+
+            # Pull the exact image built for this commit
+            docker pull "$IMAGE_NAME:$IMAGE_TAG"
 
             # Force remove all containers so compose takes full ownership
             # postgres_data volume is NEVER removed — data is safe
@@ -108,10 +125,41 @@ jobs:
               asr-middleware-db \
               2>/dev/null || true
 
-            # Bring up full stack under this compose project
-            IMAGE_NAME="$IMAGE_NAME" docker compose -f "$DEPLOY_COMPOSE" up -d \
-              --pull missing \
-              --remove-orphans
+            # Start infrastructure first so we can safely ensure credentials match the persisted DB volume
+            IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$DEPLOY_COMPOSE" up -d \
+              --pull always \
+              --remove-orphans \
+              db redis
+
+            echo "==> Waiting for asr-middleware-db to become healthy..."
+            for i in $(seq 1 30); do
+              DB_STATUS=$(docker inspect --format='{{.State.Health.Status}}' asr-middleware-db 2>/dev/null || echo "starting")
+              if [ "$DB_STATUS" = "healthy" ]; then
+                echo "  Database healthy after $((i * 2))s."
+                break
+              fi
+              echo "  [$i/30] $DB_STATUS - waiting 2s..."
+              sleep 2
+            done
+
+            if [ "$DB_STATUS" != "healthy" ]; then
+              echo "==> ERROR: asr-middleware-db failed to become healthy!"
+              docker logs --tail 120 asr-middleware-db || true
+              exit 1
+            fi
+
+            echo "==> Syncing Postgres role password with current .env (persistent volume safe)..."
+            docker exec asr-middleware-db \
+              psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d postgres \
+                -v target_role="$DB_USER" \
+                -v target_password="$DB_PASSWORD" \
+                -c "ALTER ROLE :\"target_role\" WITH PASSWORD :'target_password';"
+
+            # Bring up application services under this compose project
+            IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$DEPLOY_COMPOSE" up -d \
+              --pull always \
+              --remove-orphans \
+              backend worker
 
             # Wait for backend (entrypoint.sh runs alembic upgrade head first)
             echo "==> Waiting for asr-middleware-backend to become healthy..."
@@ -135,6 +183,7 @@ jobs:
             docker logs --tail 60 asr-middleware-backend
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
           APP_DIR: ${{ env.APP_DIR }}
           DEPLOY_COMPOSE: ${{ env.DEPLOY_COMPOSE }}
           COMPOSE_B64: ${{ needs.build-and-push.outputs.compose_b64 }}

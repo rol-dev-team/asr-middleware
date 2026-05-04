@@ -250,6 +250,14 @@ curl http://localhost:8000/docs
 
 ## Manual Operations on VM
 
+## How Automated Deploy Works (GitHub Actions)
+
+- The workflow builds the backend image from `backend/Dockerfile` and pushes it to DockerHub on every push to `main`.
+- The VM deploy uses `docker-compose.deploy.yml` and brings up: **Postgres (persistent volume)** + **Redis** + **FastAPI backend** + **Celery worker**.
+- Database persistence is via the `postgres_data` Docker volume (containers are recreated, the volume is not removed).
+- Alembic migrations run automatically on backend container start via `backend/entrypoint.sh` (`alembic upgrade head` before Uvicorn starts).
+- The worker is started only after the backend becomes healthy, so migrations complete before Celery starts processing jobs.
+
 ### Update Services Manually
 ```bash
 cd /home/ubuntu/asr-middleware
