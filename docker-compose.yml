@@ -35,10 +35,7 @@ services:
 
   # Backend API service
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: asr-middleware-backend:local
+    image: ${BACKEND_IMAGE:-asr-middleware-backend:local}
     container_name: asr-middleware-backend
     env_file:
       - ./backend/.env
@@ -67,10 +64,7 @@ services:
 
   # Celery worker
   worker:
-    image: asr-middleware-backend:local
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE:-asr-middleware-backend:local}
     container_name: asr-middleware-worker
     env_file:
       - ./backend/.env
