@@ -201,15 +201,22 @@ async def get_analysis_by_meeting_id(
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Retrieve a specific meeting analysis by its meeting ID.
+    Retrieve the most recent meeting analysis for a specific meeting ID.
     """
-    statement = select(MeetingAnalysis).where(MeetingAnalysis.user_id == current_user.id, MeetingAnalysis.meeting_id == meeting_id)
+    statement = (
+        select(MeetingAnalysis)
+        .where(
+            MeetingAnalysis.user_id == current_user.id,
+            MeetingAnalysis.meeting_id == meeting_id
+        )
+        .order_by(MeetingAnalysis.created_at.desc())
+    )
     result = await session.exec(statement)
-    analysis = result.all()
+    analysis = result.first()
 
-    if not analysis:
+    if analysis is None:
         raise HTTPException(status_code=404, detail="Meeting analysis not found")
-    return analysis[0]
+    return analysis
 
 
 @router.get("/{audio_id}", response_model=AudioTranscriptionPublic)
