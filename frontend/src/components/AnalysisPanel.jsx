@@ -6,7 +6,11 @@ import ExportsCard from "./analysis/ExportsCard";
 import FullAnalysis from "./analysis/FullAnalysis";
 import DocumentPreview from "./analysis/DocumentPreview";
 import ShareSection from "./analysis/ShareSection";
-import { transcribeAudio, parseTranscriptionToMessages } from "@/api/audioApi";
+import {
+  startFullAnalysis,
+  getAudioById,
+  parseTranscriptionToMessages,
+} from "@/api/audioApi";
 
 const AnalysisPanel = ({
   audioBlob,
@@ -25,6 +29,17 @@ const AnalysisPanel = ({
   const hasUploadedRef = useRef(false);
 
   useEffect(() => {
+    if (!audioBlob) {
+      hasUploadedRef.current = false;
+      setIsAnalyzed(false);
+      setIsAnalyzing(false);
+      setTranscriptMessages([]);
+      setRawTranscription("");
+      setTranscriptionRecord(null);
+      setError(null);
+      return;
+    }
+
     if (!audioBlob || isRecording || hasUploadedRef.current) return;
 
     hasUploadedRef.current = true;
@@ -35,7 +50,30 @@ const AnalysisPanel = ({
       setError(null);
 
       try {
-        const record = await transcribeAudio(audioBlob, meetingTitle);
+        const pipeline = await startFullAnalysis(audioBlob, meetingTitle);
+        let record = null;
+        const maxAttempts = 120;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          record = await getAudioById(pipeline.transcription_id);
+          setTranscriptionRecord(record);
+
+          if (
+            record?.transcription_text &&
+            record.transcription_text !== "Processing..."
+          ) {
+            break;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+
+        if (
+          !record?.transcription_text ||
+          record.transcription_text === "Processing..."
+        ) {
+          throw new Error("Timed out waiting for transcription to complete.");
+        }
 
         setTranscriptionRecord(record);
         setRawTranscription(record.transcription_text);
@@ -50,7 +88,7 @@ const AnalysisPanel = ({
         setError(
           typeof detail === "string"
             ? detail
-            : "Transcription failed. Please try again."
+            : err.message || "Transcription failed. Please try again."
         );
       } finally {
         setIsAnalyzing(false);

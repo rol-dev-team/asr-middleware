@@ -1,8 +1,9 @@
 import axiosInstance from "./axiosInstance";
 
 const AUDIO_PREFIX = "/api/v1/audios";
+const UTILS_PREFIX = "/api/v1/utils";
 
-export const transcribeAudio = async (audioBlob, title = "Untitled") => {
+const buildAudioUploadFormData = (audioBlob) => {
   const formData = new FormData();
 
   const mimeType = audioBlob.type || "audio/webm";
@@ -17,7 +18,27 @@ export const transcribeAudio = async (audioBlob, title = "Untitled") => {
 
   formData.append("file", file);
 
+  return formData;
+};
+
+export const transcribeAudio = async (audioBlob, title = "Untitled") => {
+  const formData = buildAudioUploadFormData(audioBlob);
+
   const { data } = await axiosInstance.post(`${AUDIO_PREFIX}/transcribe`, formData, {
+    params: { title },
+    headers: {
+      "Content-Type": undefined,
+    },
+    timeout: 300_000,
+  });
+
+  return data;
+};
+
+export const startFullAnalysis = async (audioBlob, title = "Untitled") => {
+  const formData = buildAudioUploadFormData(audioBlob);
+
+  const { data } = await axiosInstance.post(`${UTILS_PREFIX}/full-analysis`, formData, {
     params: { title },
     headers: {
       "Content-Type": undefined,
