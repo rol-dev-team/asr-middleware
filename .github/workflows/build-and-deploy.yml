@@ -47,23 +47,29 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
+      - name: Test SSH connectivity
+        run: |
+          nc -zv -w 10 ${{ secrets.VM_HOST }} ${{ secrets.VM_PORT }} \
+            && echo "PORT OPEN" \
+            || echo "PORT CLOSED/TIMEOUT"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
-          port: ${{ secrets.VM_PORT || 22 }}
+          port: ${{ secrets.VM_PORT }}
           envs: IMAGE_NAME,APP_DIR,DEPLOY_COMPOSE
           script: |
             set -e
             mkdir -p "$APP_DIR"
             cd "$APP_DIR"
 
-            # Pull latest compose file directly from GitHub (no scp needed)
-            REPO="${{ github.server_url }}/${{ github.repository }}"
-            RAW_URL="https://raw.githubusercontent.com/${{ github.repository }}/main/${{ env.DEPLOY_COMPOSE }}"
-            curl -fsSL "$RAW_URL" -o "$DEPLOY_COMPOSE"
+            curl -fsSL \
+              -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+              "https://raw.githubusercontent.com/${{ github.repository }}/main/$DEPLOY_COMPOSE" \
+              -o "$DEPLOY_COMPOSE"
 
             cat > .env << 'ENVEOF'
             DB_USER=${{ secrets.DB_USER }}
