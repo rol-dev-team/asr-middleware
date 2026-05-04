@@ -57,11 +57,11 @@ async def translate_banglish_to_english(
     if not source_text:
         raise HTTPException(status_code=400, detail="No text available to translate")
     
-    # Create record, inheriting meeting_id from the parent transcription
+    # Create record, inheriting task_id from the parent transcription
     translation = AudioTranslation(
         id=uuid.uuid4(),
         audio_transcription_id=translation_data.audio_transcription_id,
-        meeting_id=audio[0].meeting_id,
+        task_id=audio[0].task_id,
         source_text=source_text,
         translated_text="Processing...", # Placeholder
         user_id=current_user.id,
@@ -74,7 +74,13 @@ async def translate_banglish_to_english(
     
     # Trigger Task
     from app.worker.tasks import task_translate_audio
-    task_translate_audio.delay(str(translation.id), source_text)
+    celery_result = task_translate_audio.delay(str(translation.id), source_text)
+
+    if translation.task_id is None:
+        translation.task_id = celery_result.id
+        session.add(translation)
+        await session.commit()
+        await session.refresh(translation)
     
     return translation
 

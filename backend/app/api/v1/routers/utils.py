@@ -37,8 +37,10 @@ async def create_full_analysis_pipeline(
     title: str = "Untitled",
     generate_markdown: bool = True,
     session: AsyncSession = Depends(get_session),
-    meeting_id: uuid.UUID | None = None
+    task_id: str | None = None,
+    is_crm: bool = False
 ):
+    if is_crm:
     # 1. Basic File Validation & Storage
     if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=400, detail="File must be audio")
@@ -59,7 +61,7 @@ async def create_full_analysis_pipeline(
     # A. Transcription
     audio_transcription = AudioTranscription(
         id=uuid.uuid4(),
-        meeting_id=meeting_id,
+        task_id=task_id,
         filename=unique_filename,
         original_filename=file.filename,
         file_size=len(contents),
@@ -71,7 +73,7 @@ async def create_full_analysis_pipeline(
     # B. Translation
     audio_translation = AudioTranslation(
         id=uuid.uuid4(),
-        meeting_id=meeting_id,
+        task_id=task_id,
         audio_transcription_id=audio_transcription.id,
         source_text="Waiting for transcription...",
         translated_text="Processing...",
@@ -82,7 +84,7 @@ async def create_full_analysis_pipeline(
     meeting_analysis = MeetingAnalysis(
         id=uuid.uuid4(),
         audio_translation_id=audio_translation.id,
-        meeting_id=meeting_id,
+        task_id=task_id,
         user_id=current_user.id,
         summary="Processing..."
     )
@@ -96,7 +98,7 @@ async def create_full_analysis_pipeline(
 
     # 3. Trigger the Master Pipeline Task
     from app.worker.tasks import task_full_meeting_pipeline
-    task_full_meeting_pipeline.delay(
+    celery_result = task_full_meeting_pipeline.delay(
         str(audio_transcription.id),
         str(audio_translation.id),
         str(meeting_analysis.id),
@@ -104,6 +106,15 @@ async def create_full_analysis_pipeline(
         file.content_type,
         generate_markdown
     )
+
+    if task_id is None:
+        audio_transcription.task_id = celery_result.id
+        audio_translation.task_id = celery_result.id
+        meeting_analysis.task_id = celery_result.id
+        session.add(audio_transcription)
+        session.add(audio_translation)
+        session.add(meeting_analysis)
+        await session.commit()
 
     result = FullPipeline(
         transcription_id=audio_transcription.id,

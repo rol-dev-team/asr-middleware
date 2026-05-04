@@ -40,7 +40,7 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     title: str = "Untitled",
     session: AsyncSession = Depends(get_session),
-    meeting_id: uuid.UUID = None
+    task_id: str | None = None
 ):
     """
     Upload an audio file and transcribe it to Banglish (Bangla in Roman alphabet).
@@ -76,7 +76,7 @@ async def transcribe_audio(
     # 2. Create DB record with EMPTY transcription_text
     audio_transcription = AudioTranscription(
         id=uuid.uuid4(), # Explicitly generate ID to pass to task
-        meeting_id=meeting_id,
+        task_id=task_id,
         filename=unique_filename,
         original_filename=file.filename,
         file_size=len(contents),
@@ -91,11 +91,17 @@ async def transcribe_audio(
     
     # 3. Trigger Background Task
     from app.worker.tasks import task_transcribe_audio
-    task_transcribe_audio.delay(
+    celery_result = task_transcribe_audio.delay(
         str(audio_transcription.id), 
         str(file_path), 
         file.content_type
     )
+
+    if audio_transcription.task_id is None:
+        audio_transcription.task_id = celery_result.id
+        session.add(audio_transcription)
+        await session.commit()
+        await session.refresh(audio_transcription)
     
     return audio_transcription
 
@@ -135,7 +141,7 @@ async def create_meeting_analysis(
     # 2. Create the record in 'Pending' state
     new_analysis = MeetingAnalysis(
         audio_translation_id=analysis_data.audio_translation_id,
-        meeting_id=analysis_data.meeting_id,
+        task_id=analysis_data.task_id,
         user_id=current_user.id,
         model_used="gemini-2.5-flash",
         summary="Processing...",  # Placeholder
@@ -149,11 +155,17 @@ async def create_meeting_analysis(
 
     # 3. Trigger Celery
     from app.worker.tasks import task_analyze_meeting
-    task_analyze_meeting.delay(
+    celery_result = task_analyze_meeting.delay(
         str(new_analysis.id), 
         str(analysis_data.audio_translation_id), 
         analysis_data.generate_markdown
     )
+
+    if new_analysis.task_id is None:
+        new_analysis.task_id = celery_result.id
+        session.add(new_analysis)
+        await session.commit()
+        await session.refresh(new_analysis)
 
     return new_analysis
 
@@ -193,10 +205,10 @@ async def get_analysis_by_id(
     return analysis[0]
 
 
-@router.get("/analyses/meetings/{meeting_id}", response_model=MeetingAnalysisPublic)
-async def get_analysis_by_meeting_id(
+@router.get("/analyses/meetings/{task_id}", response_model=MeetingAnalysisPublic)
+async def get_analysis_by_task_id(
     current_user: Annotated[User, Depends(get_current_active_user)],
-    meeting_id: uuid.UUID,
+    task_id: str,
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -206,7 +218,7 @@ async def get_analysis_by_meeting_id(
         select(MeetingAnalysis)
         .where(
             MeetingAnalysis.user_id == current_user.id,
-            MeetingAnalysis.meeting_id == meeting_id
+            MeetingAnalysis.task_id == task_id
         )
         .order_by(MeetingAnalysis.created_at.desc())
     )
