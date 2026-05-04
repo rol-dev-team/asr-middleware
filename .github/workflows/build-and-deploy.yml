@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
   workflow_dispatch:
 
 env:
@@ -47,7 +50,6 @@ jobs:
       - name: Encode compose file
         id: encode
         run: |
-          # docker-compose.deploy.yml is at repo root
           echo "compose_b64=$(base64 -w 0 ${{ env.DEPLOY_COMPOSE }})" >> $GITHUB_OUTPUT
 
   deploy:
@@ -74,9 +76,10 @@ jobs:
             mkdir -p "$APP_DIR"
             cd "$APP_DIR"
 
-            # Write compose file decoded from base64 — no curl/token needed
+            # Write compose file decoded from base64
             echo "$COMPOSE_B64" | base64 -d > "$DEPLOY_COMPOSE"
 
+            # Write .env from GitHub Secrets
             cat > .env << 'ENVEOF'
             DB_USER=${{ secrets.DB_USER }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
@@ -91,12 +94,18 @@ jobs:
             ENVEOF
             chmod 600 .env
 
+            # Pull latest image
             docker pull "$IMAGE_NAME:latest"
 
+            # Stop and remove ONLY backend + worker — db and redis keep running
+            docker rm -f asr-middleware-backend asr-middleware-worker 2>/dev/null || true
+
+            # Bring up full stack — db/redis untouched, backend/worker recreated fresh
             IMAGE_NAME="$IMAGE_NAME" docker compose -f "$DEPLOY_COMPOSE" up -d \
               --pull missing \
               --remove-orphans
 
+            # Wait for backend healthcheck (migrations run inside entrypoint.sh first)
             echo "==> Waiting for asr-middleware-backend to become healthy..."
             for i in $(seq 1 30); do
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' asr-middleware-backend 2>/dev/null || echo "starting")
@@ -114,7 +123,7 @@ jobs:
               exit 1
             fi
 
-            echo "==> Last 60 lines of backend log:"
+            echo "==> Last 60 lines of backend log (includes migration output):"
             docker logs --tail 60 asr-middleware-backend
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
