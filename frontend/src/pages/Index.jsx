@@ -10,8 +10,9 @@ import FeatureStrip from "@/components/FeatureStrip";
 const Index = ({ onLogout, user }) => {
 
   const location = useLocation();
-  const { taskId = null, clientName = null } = location.state || {};
-  const [isRecording, setIsRecording] = useState(false);
+  const taskId = location.state?.taskId || sessionStorage.getItem("crm_task_id") || null;
+  const clientName = location.state?.clientName || sessionStorage.getItem("crm_client_name") || null;
+  const [isRecording, setIsRecording] = useState(false);   
   const [meetingTitle, setMeetingTitle] = useState("");
   const [audioBlob, setAudioBlob] = useState(null);
   const [recordingDuration, setRecordingDuration] = useState(null);
@@ -20,6 +21,8 @@ const Index = ({ onLogout, user }) => {
     useEffect(() => {
       if (clientName) {
         handleStartRecording(`Meeting with ${clientName}`);
+         sessionStorage.removeItem("crm_task_id");
+          sessionStorage.removeItem("crm_client_name");
       }
     }, []);
 
