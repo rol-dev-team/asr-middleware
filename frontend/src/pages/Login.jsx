@@ -63,25 +63,31 @@ const Login = ({ onLogin }) => {
   //for crm
   const [searchParams] = useSearchParams();
 
-useEffect(() => {
-  const accessToken = searchParams.get("access_token");
-  const refreshToken = searchParams.get("refresh_token");
+ useEffect(() => {
+    const accessToken = searchParams.get("access_token");
+    const refreshToken = searchParams.get("refresh_token");
 
-  if (accessToken && refreshToken) {
-    ssoHandoff(accessToken, refreshToken);
+    if (accessToken && refreshToken) {
+      ssoHandoff(accessToken, refreshToken);
 
-    getCurrentUser()
-      .then((userInfo) => {
-        onLogin(userInfo);
-        navigate("/");
-      })
-      .catch(() => {
-        // Tokens were invalid — just show normal login
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-      });
-  }
-}, []);
+      const taskId = searchParams.get("task_id") || null;
+      const clientName = searchParams.get("client_name") || null;
+
+      getCurrentUser()
+        .then((userInfo) => {
+          onLogin(userInfo);
+          navigate("/", {
+            state: { taskId, clientName },
+            replace: true,
+          });
+        })
+        .catch(() => {
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+        });
+    }
+  }, []);
+
   return (
     <div className="relative min-h-screen bg-background flex items-center justify-center overflow-hidden">
       <div className="pointer-events-none absolute inset-0">

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import MeetingForm from "@/components/MeetingForm";
@@ -7,11 +8,20 @@ import AnalysisPanel from "@/components/AnalysisPanel";
 import FeatureStrip from "@/components/FeatureStrip";
 
 const Index = ({ onLogout, user }) => {
+
+  const location = useLocation();
+  const { taskId = null, clientName = null } = location.state || {};
   const [isRecording, setIsRecording] = useState(false);
   const [meetingTitle, setMeetingTitle] = useState("");
   const [audioBlob, setAudioBlob] = useState(null);
   const [recordingDuration, setRecordingDuration] = useState(null);
   const [recordingStopped, setRecordingStopped] = useState(false);
+
+    useEffect(() => {
+      if (clientName) {
+        handleStartRecording(`Meeting with ${clientName}`);
+      }
+    }, []);
 
   const handleStartRecording = (title) => {
     setMeetingTitle(title);
@@ -73,11 +83,12 @@ const Index = ({ onLogout, user }) => {
                   </div>
                 </div>
               )}
-              <AnalysisPanel
+             <AnalysisPanel
                 audioBlob={audioBlob}
                 isRecording={isRecording}
                 meetingTitle={meetingTitle}
                 recordingDuration={recordingDuration}
+                taskId={taskId}
               />
             </div>
           )}
