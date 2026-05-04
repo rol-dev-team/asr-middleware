@@ -8,11 +8,13 @@ import DocumentPreview from "./analysis/DocumentPreview";
 import ShareSection from "./analysis/ShareSection";
 import { transcribeAudio, parseTranscriptionToMessages } from "@/api/audioApi";
 
+
 const AnalysisPanel = ({
   audioBlob,
   isRecording,
   meetingTitle = "Untitled",
   recordingDuration = null,
+  taskId = null,
 }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isAnalyzed, setIsAnalyzed] = useState(false);
@@ -35,7 +37,7 @@ const AnalysisPanel = ({
       setError(null);
 
       try {
-        const record = await transcribeAudio(audioBlob, meetingTitle);
+        const record = await transcribeAudio(audioBlob, meetingTitle, taskId);
 
         setTranscriptionRecord(record);
         setRawTranscription(record.transcription_text);
@@ -58,7 +60,7 @@ const AnalysisPanel = ({
     };
 
     runTranscription();
-  }, [audioBlob, isRecording, meetingTitle]);
+  },  [audioBlob, isRecording, meetingTitle, taskId]);
 
   // Serialize messages to JSON string — TranscriptPanel does JSON.parse internally
   const transcriptContent = isAnalyzed
