@@ -5,8 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'backend/**'
-      - 'docker-compose.yml'
+      - '**'
   workflow_dispatch:
 
 env:
@@ -35,8 +34,8 @@ jobs:
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: .
+          file: ./Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
@@ -97,9 +96,14 @@ jobs:
             # Pull latest backend image
             docker pull "$IMAGE_NAME:latest"
 
-            # Stop ALL four containers so compose can take full ownership
-            # db and redis will restart immediately via compose (data volume safe)
-            docker rm -f asr-middleware-backend asr-middleware-worker asr-middleware-redis asr-middleware-db 2>/dev/null || true
+            # Force remove all containers so compose takes full ownership
+            # postgres_data volume is NEVER removed — data is safe
+            docker rm -f \
+              asr-middleware-backend \
+              asr-middleware-worker \
+              asr-middleware-redis \
+              asr-middleware-db \
+              2>/dev/null || true
 
             # Bring up full stack under this compose project
             IMAGE_NAME="$IMAGE_NAME" docker compose -f "$DEPLOY_COMPOSE" up -d \
