@@ -43,7 +43,7 @@ services:
     env_file:
       - .env
     environment:
-      - SYNC_DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
+      - SYNC_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
       - ASYNC_DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
       - REDIS_URL=redis://redis:6379/0
     ports:

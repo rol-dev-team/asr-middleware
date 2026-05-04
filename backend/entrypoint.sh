@@ -1,9 +1,41 @@
 #!/bin/sh
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  FILE PATH:  ./entrypoint.sh                                    │
+# │  Placed at:  project root  (same level as Dockerfile)           │
+# │  Purpose:    wait for DB → run migrations → start uvicorn       │
+# └─────────────────────────────────────────────────────────────────┘
 set -e
 
-echo "==> Running Alembic migrations..."
-alembic upgrade head
-echo "==> Migrations complete."
+echo "==> Waiting for database to be ready..."
+max_retries=30
+count=0
+until python -c "
+import asyncio, asyncpg, os, sys
+async def check():
+    url = os.environ['ASYNC_DATABASE_URL'].replace('+asyncpg', '')
+    try:
+        conn = await asyncpg.connect(url)
+        await conn.close()
+    except Exception as e:
+        print(f'  DB not ready: {e}', file=sys.stderr)
+        sys.exit(1)
+asyncio.run(check())
+" 2>/dev/null; do
+  count=$((count+1))
+  if [ $count -ge $max_retries ]; then
+    echo "  DB wait timed out after $max_retries retries."
+    exit 1
+  fi
+  echo "  ...retrying in 2s ($count/$max_retries)"
+  sleep 2
+done
+echo "  DB is up."
 
-echo "==> Starting uvicorn..."
+echo "==> Running Alembic migrations..."
+# alembic.ini is at /app/alembic.ini  (WORKDIR = /app in Dockerfile)
+# alembic.ini must have:  script_location = app/alembic
+alembic upgrade head
+echo "  Migrations done."
+
+echo "==> Starting FastAPI (uvicorn)..."
 exec uvicorn app.api.main:app --host 0.0.0.0 --port 8000

@@ -4,23 +4,21 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'backend/**'
-      - 'docker-compose.deploy.yml'
-      - '.github/workflows/**'    # ← trigger when workflow itself changes
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/asr-middleware-backend
-  IMAGE_TAG: sha-${{ github.sha }}
-  APP_DIR: /home/itbilling/Projects/asr-middleware
-  DEPLOY_COMPOSE: docker-compose.deploy.yml
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/helpdesk-voice-api
+  APP_DIR: ${{ secrets.APP_DIR }}
+  APP_ENV: ${{ secrets.APP_ENV }}
+  APP_PORT: ${{ secrets.APP_PORT }}
 
 jobs:
+
+  # ──────────────────────────────────────────────────────────────────
+  # JOB 1 — Build image and push to Docker Hub
+  # ──────────────────────────────────────────────────────────────────
   build-and-push:
     runs-on: ubuntu-latest
-    outputs:
-      compose_b64: ${{ steps.encode.outputs.compose_b64 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,134 +32,107 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push backend image
+      - name: Extract short SHA
+        id: sha
+        run: echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend          # ← build context is backend/
-          file: ./backend/Dockerfile  # ← Dockerfile is inside backend/
+          # Build the backend image from ./backend
+          context: ./backend
+          file: ./backend/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:${{ steps.sha.outputs.tag }}
+          # Layer cache speeds up subsequent builds significantly
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-to:   type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
-      - name: Encode compose file
-        id: encode
-        run: |
-          # docker-compose.deploy.yml is at repo root
-          echo "compose_b64=$(base64 -w 0 docker-compose.deploy.yml)" >> $GITHUB_OUTPUT
-
+  # ──────────────────────────────────────────────────────────────────
+  # JOB 2 — Deploy to VM
+  #   1. SCP docker-compose.yml to VM
+  #   2. SSH: write .env from secrets
+  #   3. SSH: docker pull + docker compose up
+  #   4. SSH: wait for healthcheck + tail logs
+  #
+  #   Alembic migration runs automatically inside entrypoint.sh
+  #   which is baked into the Docker image.
+  # ──────────────────────────────────────────────────────────────────
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Test SSH connectivity
-        run: |
-          nc -zv -w 10 ${{ secrets.VM_HOST }} ${{ secrets.VM_PORT }} \
-            && echo "PORT OPEN" \
-            || echo "PORT CLOSED/TIMEOUT"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Copy docker-compose.yml from repo root to VM
+      # Path on VM: /opt/helpdesk-voice-api/docker-compose.yml
+      - name: Copy docker-compose.yml to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key:      ${{ secrets.VM_SSH_KEY }}
+          port:     ${{ secrets.VM_PORT || 22 }}
+          source:   "docker-compose.yml"           # project root
+          target:   ${{ env.APP_DIR }}
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VM_HOST }}
+          host:     ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          port: ${{ secrets.VM_PORT }}
-          envs: IMAGE_NAME,IMAGE_TAG,APP_DIR,DEPLOY_COMPOSE,COMPOSE_B64
+          key:      ${{ secrets.VM_SSH_KEY }}
+          port:     ${{ secrets.VM_PORT || 22 }}
+          envs: IMAGE_NAME,APP_DIR
           script: |
             set -e
-            mkdir -p "$APP_DIR"
             cd "$APP_DIR"
 
-            # Write compose file decoded from base64
-            echo "$COMPOSE_B64" | base64 -d > "$DEPLOY_COMPOSE"
+            # Ensure expected paths exist
+            mkdir -p backend
 
-            # Write .env from GitHub Secrets
-            cat > .env << 'ENVEOF'
+            # ── 1. Write .env from GitHub Secrets ───────────────────
+            # heredoc keeps secrets off the process list and out of
+            # shell history. File is chmod 600 (owner-read only).
+            cat > backend/.env << 'ENVEOF'
             DB_USER=${{ secrets.DB_USER }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_NAME=${{ secrets.DB_NAME }}
-            DB_PORT=${{ secrets.DB_PORT }}
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             SECRET_KEY=${{ secrets.SECRET_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            APP_PORT=${{ secrets.APP_PORT }}
             ALGORITHM=${{ secrets.ALGORITHM }}
-            ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+            APP_ENV=${{ secrets.APP_ENV }}
             REFRESH_TOKEN_EXPIRE_DAYS=${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}
-            BACKEND_PORT=${{ secrets.BACKEND_PORT }}
+            ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
             ENVEOF
-            chmod 600 .env
+            chmod 600 backend/.env
 
-            # Fail fast if required env vars are missing (prevents confusing runtime failures)
-            for k in DB_USER DB_PASSWORD DB_NAME DB_PORT GEMINI_API_KEY SECRET_KEY ALGORITHM ACCESS_TOKEN_EXPIRE_MINUTES REFRESH_TOKEN_EXPIRE_DAYS BACKEND_PORT; do
-              if ! grep -q "^${k}=" .env; then
-                echo "==> ERROR: Missing ${k} in generated .env"
-                exit 1
-              fi
-            done
+            # ── 2. Pull the freshly built image ─────────────────────
+            BACKEND_IMAGE="$IMAGE_NAME:latest"
+            docker pull "$BACKEND_IMAGE"
 
-            # Read DB credentials from .env without sourcing it (safer with arbitrary secret characters)
-            DB_USER=$(grep -E '^DB_USER=' .env | head -n1 | cut -d= -f2- | tr -d '\r')
-            DB_PASSWORD=$(grep -E '^DB_PASSWORD=' .env | head -n1 | cut -d= -f2- | tr -d '\r')
-            if [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
-              echo "==> ERROR: DB_USER/DB_PASSWORD missing in .env"
-              exit 1
-            fi
+            # ── 3. Bring up the stack with compose ──────────────────
+            # Keep DB + Redis running; update backend + worker to the new image.
+            # The postgres_data volume is NEVER removed here.
+            BACKEND_IMAGE="$BACKEND_IMAGE" docker compose up -d db redis
+            BACKEND_IMAGE="$BACKEND_IMAGE" docker compose pull backend worker
 
-            # Pull the exact image built for this commit
-            docker pull "$IMAGE_NAME:$IMAGE_TAG"
+            # Gracefully stop worker first (let it finish in-flight tasks)
+            BACKEND_IMAGE="$BACKEND_IMAGE" docker compose stop -t 60 worker || true
 
-            # Force remove all containers so compose takes full ownership
-            # postgres_data volume is NEVER removed — data is safe
-            docker rm -f \
-              asr-middleware-backend \
-              asr-middleware-worker \
-              asr-middleware-redis \
-              asr-middleware-db \
-              2>/dev/null || true
+            # Update backend first
+            BACKEND_IMAGE="$BACKEND_IMAGE" docker compose up -d --no-deps --remove-orphans backend
 
-            # Start infrastructure first so we can safely ensure credentials match the persisted DB volume
-            IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$DEPLOY_COMPOSE" up -d \
-              --pull always \
-              --remove-orphans \
-              db redis
-
-            echo "==> Waiting for asr-middleware-db to become healthy..."
-            for i in $(seq 1 30); do
-              DB_STATUS=$(docker inspect --format='{{.State.Health.Status}}' asr-middleware-db 2>/dev/null || echo "starting")
-              if [ "$DB_STATUS" = "healthy" ]; then
-                echo "  Database healthy after $((i * 2))s."
-                break
-              fi
-              echo "  [$i/30] $DB_STATUS - waiting 2s..."
-              sleep 2
-            done
-
-            if [ "$DB_STATUS" != "healthy" ]; then
-              echo "==> ERROR: asr-middleware-db failed to become healthy!"
-              docker logs --tail 120 asr-middleware-db || true
-              exit 1
-            fi
-
-            echo "==> Syncing Postgres role password with current .env (persistent volume safe)..."
-            DB_USER_SQL=$(printf "%s" "$DB_USER" | sed 's/"/""/g')
-            DB_PASSWORD_SQL=$(printf "%s" "$DB_PASSWORD" | sed "s/'/''/g")
-            docker exec asr-middleware-db \
-              psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d postgres \
-                -c "ALTER ROLE \"$DB_USER_SQL\" WITH PASSWORD '$DB_PASSWORD_SQL';"
-
-            # Bring up application services under this compose project
-            IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$DEPLOY_COMPOSE" up -d \
-              --pull always \
-              --remove-orphans \
-              backend worker
-
-            # Wait for backend (entrypoint.sh runs alembic upgrade head first)
+            # ── 4. Wait for backend healthcheck ─────────────────────
             echo "==> Waiting for asr-middleware-backend to become healthy..."
             for i in $(seq 1 30); do
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' asr-middleware-backend 2>/dev/null || echo "starting")
@@ -169,21 +140,20 @@ jobs:
                 echo "  Backend healthy after $((i * 5))s."
                 break
               fi
-              echo "  [$i/30] $STATUS - waiting 5s..."
+              echo "  [$i/30] $STATUS — waiting 5s..."
               sleep 5
             done
 
             if [ "$STATUS" != "healthy" ]; then
               echo "==> ERROR: asr-middleware-backend failed to become healthy!"
+              echo "==> Last 60 lines of backend log:"
               docker logs --tail 60 asr-middleware-backend
               exit 1
             fi
 
-            echo "==> Last 60 lines of backend log (includes migration output):"
+            # Bring worker back after backend is confirmed healthy
+            BACKEND_IMAGE="$BACKEND_IMAGE" docker compose up -d --no-deps --remove-orphans worker
+
+            # ── 5. Show recent logs (includes migration output) ──────
+            echo "==> Last 60 lines of backend log:"
             docker logs --tail 60 asr-middleware-backend
-        env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-          APP_DIR: ${{ env.APP_DIR }}
-          DEPLOY_COMPOSE: ${{ env.DEPLOY_COMPOSE }}
-          COMPOSE_B64: ${{ needs.build-and-push.outputs.compose_b64 }}
