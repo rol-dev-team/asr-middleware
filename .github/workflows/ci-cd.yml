@@ -8,8 +8,9 @@ on:
 
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/asr-middleware-backend
-  APP_DIR: /opt/asr-middleware
+  APP_DIR: /home/itbilling/Projects/asr-middleware
   DEPLOY_COMPOSE: docker-compose.deploy.yml
+  STAGE_DIR: /tmp/asr-middleware-deploy
 
 jobs:
   build-and-push:
@@ -27,18 +28,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract short SHA
-        run: echo "SHA_TAG=sha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          dockerfile: ./backend/Dockerfile
+          file: ./backend/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ env.SHA_TAG }}
+            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
           labels: |
@@ -61,7 +59,7 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           port: ${{ secrets.VM_PORT || 22 }}
           source: "${{ env.DEPLOY_COMPOSE }}"
-          target: ${{ env.APP_DIR }}
+          target: ${{ env.STAGE_DIR }}
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -70,11 +68,25 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           port: ${{ secrets.VM_PORT || 22 }}
-          envs: IMAGE_NAME,APP_DIR,DEPLOY_COMPOSE
+          envs: IMAGE_NAME,APP_DIR,DEPLOY_COMPOSE,STAGE_DIR
           script: |
             set -e
             mkdir -p "$APP_DIR"
+
+            # Move uploaded compose into the protected app directory.
+            if [ -f "$STAGE_DIR/$DEPLOY_COMPOSE" ]; then
+              mv "$STAGE_DIR/$DEPLOY_COMPOSE" "$APP_DIR/$DEPLOY_COMPOSE"
+            fi
+
             cd "$APP_DIR"
+
+            # Update existing repo in a safe fast-forward-only manner.
+            if [ -d .git ]; then
+              git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
+              git pull --ff-only
+            else
+              echo "==> NOTE: $APP_DIR is not a git repo; skipping git pull."
+            fi
 
             cat > .env << 'ENVEOF'
             DB_USER=${{ secrets.DB_USER }}
