@@ -2,7 +2,7 @@ from sqlmodel import SQLModel, Field
 from pydantic import EmailStr
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 
 class UserBase(SQLModel):
@@ -161,3 +161,33 @@ class FullPipeline(SQLModel):
 
 class UserStatusUpdate(SQLModel):
     is_active: bool
+
+
+class EmailAttachment(SQLModel):
+    filename: str = Field(max_length=255)
+    content_type: str = Field(default="application/octet-stream", max_length=255)
+    data_base64: str
+
+
+class EmailSendRequest(SQLModel):
+    to: list[EmailStr]
+    cc: list[EmailStr] = Field(default_factory=list)
+    bcc: list[EmailStr] = Field(default_factory=list)
+    subject: str = Field(max_length=255)
+
+    # If body_html is provided, it will be used as-is inside the template.
+    # Otherwise, body_text will be rendered into the template.
+    body_text: str | None = None
+    body_html: str | None = None
+
+    # Optional MJML template name located in app/email_templates/src.
+    # Defaults to "generic_message".
+    template_name: str = Field(default="generic_message", max_length=255)
+    template_context: dict[str, Any] = Field(default_factory=dict)
+
+    attachments: list[EmailAttachment] = Field(default_factory=list)
+
+
+class EmailQueuedResponse(SQLModel):
+    task_id: str
+    status: str = "queued"

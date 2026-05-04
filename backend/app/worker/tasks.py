@@ -2,7 +2,19 @@ import os
 import re
 import time
 import uuid
+import base64
+import shutil
+import smtplib
+import ssl
+import subprocess
 from datetime import datetime
+from email.message import EmailMessage
+from email.utils import formataddr
+from pathlib import Path
+from typing import Any
+
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from markupsafe import escape
 from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
 from google import genai
@@ -26,6 +38,197 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # 1. Initialize the Celery logger
 logger = get_task_logger(__name__)
+
+
+_TEMPLATES_SRC_DIR = Path(__file__).resolve().parents[1] / "email_templates" / "src"
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATES_SRC_DIR)),
+    autoescape=True,
+    undefined=StrictUndefined,
+)
+
+
+def _coerce_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _compile_mjml_to_html(mjml_source: str) -> str | None:
+    """Compile MJML to HTML using the `mjml` CLI if present.
+
+    Returns None if mjml isn't available.
+    """
+    if shutil.which("mjml") is None:
+        return None
+
+    # Try a couple common CLI invocations.
+    for args in (["mjml", "-s", "--stdin"], ["mjml", "-s"]):
+        try:
+            proc = subprocess.run(
+                args,
+                input=mjml_source,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                return proc.stdout
+        except Exception:
+            continue
+
+    return None
+
+
+def _wrap_fallback_html(subject: str, body_html: str) -> str:
+    # Minimal professional wrapper if MJML isn't available.
+    safe_subject = escape(subject)
+    return f"""<!doctype html>
+<html>
+  <head>
+    <meta charset=\"utf-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>{safe_subject}</title>
+  </head>
+  <body style=\"margin:0;background:#f3f4f6;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#111827;\">
+    <div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:24px;\">
+      <h2 style=\"margin:0 0 12px 0;font-size:18px;\">{safe_subject}</h2>
+      <div style=\"font-size:14px;line-height:22px;\">{body_html}</div>
+      <hr style=\"border:none;border-top:1px solid #e5e7eb;margin:20px 0\" />
+      <div style=\"font-size:12px;color:#6b7280\">This message was sent automatically.</div>
+    </div>
+  </body>
+</html>"""
+
+
+def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
+    subject = str(payload.get("subject") or "")
+    app_name = os.getenv("APP_NAME", "ASR Middleware")
+
+    body_html = payload.get("body_html")
+    body_text = payload.get("body_text")
+
+    if body_html is None:
+        # Convert plain text to basic HTML.
+        text = body_text or ""
+        body_html = "<p>" + escape(text).replace("\n", "<br/>") + "</p>"
+
+    if body_text is None:
+        # Fallback: strip tags very roughly.
+        body_text = re.sub(r"<[^>]+>", "", str(body_html))
+
+    template_name = str(payload.get("template_name") or "generic_message")
+    if not template_name.endswith(".mjml"):
+        template_name = f"{template_name}.mjml"
+
+    template_context: dict[str, Any] = payload.get("template_context") or {}
+    context = {
+        "app_name": app_name,
+        "subject": subject,
+        "heading": template_context.get("heading") or subject or "Message",
+        "preheader": template_context.get("preheader") or subject,
+        "body_html": body_html,
+        **template_context,
+    }
+
+    try:
+        mjml_template = _jinja_env.get_template(template_name)
+        mjml_source = mjml_template.render(**context)
+    except Exception as e:
+        logger.warning(f"MJML template render failed ({template_name}): {e}")
+        return _wrap_fallback_html(subject, str(body_html)), str(body_text)
+
+    compiled_html = _compile_mjml_to_html(mjml_source)
+    if compiled_html is None:
+        logger.warning("MJML compiler not available; using fallback HTML wrapper")
+        return _wrap_fallback_html(subject, str(body_html)), str(body_text)
+
+    return compiled_html, str(body_text)
+
+
+@celery_app.task(name="task_send_smtp_email")
+def task_send_smtp_email(payload: dict[str, Any]) -> dict[str, Any]:
+    """Send an SMTP email in the background.
+
+    Payload is expected to match EmailSendRequest.model_dump().
+    """
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT") or "587")
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    smtp_tls = _coerce_bool(os.getenv("SMTP_TLS"), default=True)
+    smtp_ssl = _coerce_bool(os.getenv("SMTP_SSL"), default=False)
+
+    from_email = os.getenv("SMTP_FROM", smtp_user or "")
+    from_name = os.getenv("SMTP_FROM_NAME", os.getenv("APP_NAME", "ASR Middleware"))
+
+    if not smtp_host:
+        raise RuntimeError("SMTP_HOST is not set")
+    if not from_email:
+        raise RuntimeError("SMTP_FROM (or SMTP_USER) is not set")
+
+    subject = str(payload.get("subject") or "")
+    to_list = [str(x) for x in (payload.get("to") or [])]
+    cc_list = [str(x) for x in (payload.get("cc") or [])]
+    bcc_list = [str(x) for x in (payload.get("bcc") or [])]
+    recipients = [*to_list, *cc_list, *bcc_list]
+    if not recipients:
+        raise ValueError("At least one recipient must be provided")
+
+    html_body, text_body = _render_email_html(payload)
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr((from_name, from_email))
+    msg["To"] = ", ".join(to_list)
+    if cc_list:
+        msg["Cc"] = ", ".join(cc_list)
+
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+
+    for att in payload.get("attachments") or []:
+        try:
+            filename = str(att.get("filename") or "attachment")
+            content_type = str(att.get("content_type") or "application/octet-stream")
+            data_b64 = att.get("data_base64")
+            if not data_b64:
+                continue
+            data = base64.b64decode(data_b64)
+
+            if "/" in content_type:
+                maintype, subtype = content_type.split("/", 1)
+            else:
+                maintype, subtype = "application", "octet-stream"
+
+            msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+        except Exception as e:
+            logger.warning(f"Failed to attach file: {e}")
+
+    context = ssl.create_default_context()
+    server: smtplib.SMTP | smtplib.SMTP_SSL
+
+    if smtp_ssl:
+        server = smtplib.SMTP_SSL(smtp_host, smtp_port, context=context)
+    else:
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.ehlo()
+        if smtp_tls:
+            server.starttls(context=context)
+            server.ehlo()
+
+    try:
+        if smtp_user and smtp_password:
+            server.login(smtp_user, smtp_password)
+
+        server.send_message(msg, to_addrs=recipients)
+        logger.info(f"Email sent to={to_list} cc={cc_list} bcc_count={len(bcc_list)}")
+        return {"sent": True, "recipients": recipients}
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
 
 @celery_app.task(name="task_transcribe_audio")
 def task_transcribe_audio(audio_id: str, file_path: str, mime_type: str):
