@@ -18,4 +18,5 @@ dependencies = [
     "python-multipart>=0.0.22",
     "sqlmodel>=0.0.32",
     "celery[redis]>=5.3.6",
+    "reportlab>=4.2.5",
 ]
