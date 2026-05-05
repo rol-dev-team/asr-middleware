@@ -83,6 +83,7 @@ async def create_full_analysis_pipeline(
         id=uuid.uuid4(),
         audio_translation_id=audio_translation.id,
         task_id=task_id,
+        meeting_title=(title or "").strip() or None,
         user_id=current_user.id,
         summary="Processing..."
     )
@@ -105,6 +106,8 @@ async def create_full_analysis_pipeline(
         generate_markdown
     )
 
+    pipeline_task_id = task_id or celery_result.id
+
     if task_id is None:
         audio_transcription.task_id = celery_result.id
         audio_translation.task_id = celery_result.id
@@ -115,6 +118,7 @@ async def create_full_analysis_pipeline(
         await session.commit()
 
     result = FullPipeline(
+        task_id=pipeline_task_id,
         transcription_id=audio_transcription.id,
         translation_id=audio_translation.id,
         analysis_id=meeting_analysis.id
