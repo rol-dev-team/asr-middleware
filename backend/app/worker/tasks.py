@@ -41,6 +41,7 @@ logger = get_task_logger(__name__)
 
 
 _TEMPLATES_SRC_DIR = Path(__file__).resolve().parents[1] / "email_templates" / "src"
+_MEDIA_DIR = Path(__file__).resolve().parents[2] / "media"
 _jinja_env = Environment(
     loader=FileSystemLoader(str(_TEMPLATES_SRC_DIR)),
     autoescape=True,
@@ -105,17 +106,18 @@ def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
     subject = str(payload.get("subject") or "")
     app_name = os.getenv("APP_NAME", "ASR Middleware")
 
+    body = payload.get("body")
     body_html = payload.get("body_html")
     body_text = payload.get("body_text")
 
     if body_html is None:
         # Convert plain text to basic HTML.
-        text = body_text or ""
+        text = body_text or body or ""
         body_html = "<p>" + escape(text).replace("\n", "<br/>") + "</p>"
 
     if body_text is None:
         # Fallback: strip tags very roughly.
-        body_text = re.sub(r"<[^>]+>", "", str(body_html))
+        body_text = body or re.sub(r"<[^>]+>", "", str(body_html))
 
     template_name = str(payload.get("template_name") or "generic_message")
     if not template_name.endswith(".mjml"):
@@ -146,48 +148,76 @@ def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
     return compiled_html, str(body_text)
 
 
+def _load_analysis_pdf_attachment(task_id: str) -> dict[str, Any]:
+    file_path = _MEDIA_DIR / task_id / "analysis.pdf"
+    if not file_path.exists():
+        raise FileNotFoundError(f"analysis.pdf not found for task_id={task_id}")
+
+    return {
+        "filename": "analysis.pdf",
+        "content_type": "application/pdf",
+        "data_base64": base64.b64encode(file_path.read_bytes()).decode("ascii"),
+    }
+
+
 @celery_app.task(name="task_send_smtp_email")
 def task_send_smtp_email(payload: dict[str, Any]) -> dict[str, Any]:
     """Send an SMTP email in the background.
-
     Payload is expected to match EmailSendRequest.model_dump().
     """
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT") or "587")
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    smtp_tls = _coerce_bool(os.getenv("SMTP_TLS"), default=True)
-    smtp_ssl = _coerce_bool(os.getenv("SMTP_SSL"), default=False)
-
-    from_email = os.getenv("SMTP_FROM", smtp_user or "")
-    from_name = os.getenv("SMTP_FROM_NAME", os.getenv("APP_NAME", "ASR Middleware"))
+    smtp_host = os.getenv("MAIL_HOST") or os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("MAIL_PORT") or os.getenv("SMTP_PORT") or "587")
+    smtp_user = os.getenv("MAIL_USERNAME") or os.getenv("SMTP_USER")
+    smtp_password = os.getenv("MAIL_PASSWORD") or os.getenv("SMTP_PASSWORD")
+    mail_encryption = (os.getenv("MAIL_ENCRYPTION") or "").strip().lower()
+    smtp_tls = _coerce_bool(os.getenv("SMTP_TLS"), default=mail_encryption in {"tls", "starttls"})
+    smtp_ssl = _coerce_bool(os.getenv("SMTP_SSL"), default=mail_encryption == "ssl")
+    from_email = os.getenv("MAIL_FROM_ADDRESS") or os.getenv("SMTP_FROM") or smtp_user or ""
+    from_name = os.getenv("MAIL_FROM_NAME", os.getenv("SMTP_FROM_NAME", os.getenv("APP_NAME", "ASR Middleware")))
 
     if not smtp_host:
-        raise RuntimeError("SMTP_HOST is not set")
+        raise RuntimeError("MAIL_HOST is not set")
     if not from_email:
-        raise RuntimeError("SMTP_FROM (or SMTP_USER) is not set")
+        raise RuntimeError("MAIL_FROM_ADDRESS (or MAIL_USERNAME) is not set")
 
     subject = str(payload.get("subject") or "")
-    to_list = [str(x) for x in (payload.get("to") or [])]
-    cc_list = [str(x) for x in (payload.get("cc") or [])]
-    bcc_list = [str(x) for x in (payload.get("bcc") or [])]
+    to_list = [item.strip() for item in str(payload.get("to") or "").split(",") if item.strip()]
+    cc_list = [item.strip() for item in str(payload.get("cc") or "").split(",") if item.strip()]
+    bcc_list = [item.strip() for item in str(payload.get("bcc") or "").split(",") if item.strip()]
     recipients = [*to_list, *cc_list, *bcc_list]
+
     if not recipients:
         raise ValueError("At least one recipient must be provided")
 
+    attachments = list(payload.get("attachments") or [])
+    task_id = str(payload.get("task_id") or "").strip()
+    if task_id:
+        attachments.insert(0, _load_analysis_pdf_attachment(task_id))
+
     html_body, text_body = _render_email_html(payload)
 
-    msg = EmailMessage()
+    # ── Build a proper multipart/mixed message ──────────────────────────────
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email import encoders as email_encoders
+
+    # Outer container: multipart/mixed allows attachments
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"] = formataddr((from_name, from_email))
     msg["To"] = ", ".join(to_list)
     if cc_list:
         msg["Cc"] = ", ".join(cc_list)
 
-    msg.set_content(text_body)
-    msg.add_alternative(html_body, subtype="html")
+    # Inner alternative part: plain-text fallback + HTML
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(text_body, "plain", "utf-8"))
+    alt.attach(MIMEText(html_body, "html", "utf-8"))  # HTML is last → highest priority
+    msg.attach(alt)
+    # ───────────────────────────────────────────────────────────────────────
 
-    for att in payload.get("attachments") or []:
+    for att in attachments:
         try:
             filename = str(att.get("filename") or "attachment")
             content_type = str(att.get("content_type") or "application/octet-stream")
@@ -201,13 +231,16 @@ def task_send_smtp_email(payload: dict[str, Any]) -> dict[str, Any]:
             else:
                 maintype, subtype = "application", "octet-stream"
 
-            msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(data)
+            email_encoders.encode_base64(part)
+            part.add_header("Content-Disposition", "attachment", filename=filename)
+            msg.attach(part)
         except Exception as e:
             logger.warning(f"Failed to attach file: {e}")
 
     context = ssl.create_default_context()
     server: smtplib.SMTP | smtplib.SMTP_SSL
-
     if smtp_ssl:
         server = smtplib.SMTP_SSL(smtp_host, smtp_port, context=context)
     else:
@@ -220,7 +253,6 @@ def task_send_smtp_email(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         if smtp_user and smtp_password:
             server.login(smtp_user, smtp_password)
-
         server.send_message(msg, to_addrs=recipients)
         logger.info(f"Email sent to={to_list} cc={cc_list} bcc_count={len(bcc_list)}")
         return {"sent": True, "recipients": recipients}

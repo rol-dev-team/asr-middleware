@@ -170,22 +170,24 @@ class EmailAttachment(SQLModel):
 
 
 class EmailSendRequest(SQLModel):
-    to: list[EmailStr]
-    cc: list[EmailStr] = Field(default_factory=list)
-    bcc: list[EmailStr] = Field(default_factory=list)
-    subject: str = Field(max_length=255)
+    to: Optional[str] = Field(default=None)
+    cc: Optional[str] = Field(default=None)
+    bcc: Optional[str] = Field(default=None)
+    subject: Optional[str] = Field(default=None)
+    body: Optional[str] = Field(default=None)
+    task_id: Optional[str] = Field(default=None, max_length=255)
 
     # If body_html is provided, it will be used as-is inside the template.
     # Otherwise, body_text will be rendered into the template.
-    body_text: str | None = None
-    body_html: str | None = None
+    # body_text: str | None = None
+    # body_html: str | None = None
 
     # Optional MJML template name located in app/email_templates/src.
     # Defaults to "generic_message".
-    template_name: str = Field(default="generic_message", max_length=255)
-    template_context: dict[str, Any] = Field(default_factory=dict)
+    # template_name: str = Field(default="generic_message", max_length=255)
+    # template_context: dict[str, Any] = Field(default_factory=dict)
 
-    attachments: list[EmailAttachment] = Field(default_factory=list)
+    # attachments: list[EmailAttachment] = Field(default_factory=list)
 
 
 class EmailQueuedResponse(SQLModel):
