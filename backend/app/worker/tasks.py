@@ -1,29 +1,29 @@
+import base64
 import os
 import re
-import time
-import uuid
-from datetime import datetime
-from pathlib import Path
-from celery.utils.log import get_task_logger
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-from app.worker.celery_app import celery_app
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.api.models import AudioTranscription, AudioTranslation, MeetingAnalysis
-
-import base64
 import shutil
 import smtplib
 import ssl
 import subprocess
+import time
+import uuid
+from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formataddr
+from pathlib import Path
 from typing import Any
 
+from celery.utils.log import get_task_logger
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from markupsafe import escape
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.api.models import AudioTranscription, AudioTranslation, MeetingAnalysis
+from app.worker.celery_app import celery_app
 
 
 MEDIA_DIR = Path(__file__).resolve().parents[2] / "media"
@@ -884,7 +884,6 @@ After the translation, on a new line, also provide your confidence score (0.0 to
   
   
 _TEMPLATES_SRC_DIR = Path(__file__).resolve().parents[1] / "email_templates" / "src"
-_MEDIA_DIR = Path(__file__).resolve().parents[2] / "media"
 _jinja_env = Environment(
     loader=FileSystemLoader(str(_TEMPLATES_SRC_DIR)),
     autoescape=True,
@@ -992,7 +991,7 @@ def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
 
 
 def _load_analysis_pdf_attachment(task_id: str) -> dict[str, Any]:
-    file_path = _MEDIA_DIR / task_id / "Meeting_Minutes.pdf"
+    file_path = MEDIA_DIR / task_id / "Meeting_Minutes.pdf"
     if not file_path.exists():
         raise FileNotFoundError(f"Meeting_Minutes.pdf not found for task_id={task_id}")
 
