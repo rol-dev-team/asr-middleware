@@ -149,12 +149,12 @@ def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
 
 
 def _load_analysis_pdf_attachment(task_id: str) -> dict[str, Any]:
-    file_path = _MEDIA_DIR / task_id / "analysis.pdf"
+    file_path = _MEDIA_DIR / task_id / "Meeting_Minutes.pdf"
     if not file_path.exists():
-        raise FileNotFoundError(f"analysis.pdf not found for task_id={task_id}")
+        raise FileNotFoundError(f"Meeting_Minutes.pdf not found for task_id={task_id}")
 
     return {
-        "filename": "analysis.pdf",
+        "filename": "Meeting_Minutes.pdf",
         "content_type": "application/pdf",
         "data_base64": base64.b64encode(file_path.read_bytes()).decode("ascii"),
     }
