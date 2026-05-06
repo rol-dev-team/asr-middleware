@@ -953,9 +953,13 @@ def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
     body_text = payload.get("body_text")
 
     if body_html is None:
-        # Convert plain text to basic HTML.
-        text = body_text or body or ""
-        body_html = "<p>" + escape(text).replace("\n", "<br/>") + "</p>"
+        if body and re.search(r'<[a-zA-Z]', str(body)):
+            # body already contains HTML — use it directly without escaping
+            body_html = body
+        else:
+            # Plain text — escape and wrap
+            text = body_text or body or ""
+            body_html = "<p>" + escape(str(text)).replace("\n", "<br/>") + "</p>"
 
     if body_text is None:
         # Fallback: strip tags very roughly.
