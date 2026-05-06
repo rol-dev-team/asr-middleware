@@ -946,7 +946,6 @@ def _wrap_fallback_html(subject: str, body_html: str) -> str:
 
 def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
     subject = str(payload.get("subject") or "")
-    app_name = os.getenv("APP_NAME", "ASR Middleware")
 
     body = payload.get("body")
     body_html = payload.get("body_html")
@@ -956,36 +955,9 @@ def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
         body_html = body or body_text or ""
 
     if body_text is None:
-        # Fallback: strip tags very roughly.
         body_text = body or re.sub(r"<[^>]+>", "", str(body_html))
 
-    template_name = str(payload.get("template_name") or "generic_message")
-    if not template_name.endswith(".mjml"):
-        template_name = f"{template_name}.mjml"
-
-    template_context: dict[str, Any] = payload.get("template_context") or {}
-    context = {
-        "app_name": app_name,
-        "subject": subject,
-        "heading": template_context.get("heading") or subject or "Message",
-        "preheader": template_context.get("preheader") or subject,
-        "body_html": body_html,
-        **template_context,
-    }
-
-    try:
-        mjml_template = _jinja_env.get_template(template_name)
-        mjml_source = mjml_template.render(**context)
-    except Exception as e:
-        logger.warning(f"MJML template render failed ({template_name}): {e}")
-        return _wrap_fallback_html(subject, str(body_html)), str(body_text)
-
-    compiled_html = _compile_mjml_to_html(mjml_source)
-    if compiled_html is None:
-        logger.warning("MJML compiler not available; using fallback HTML wrapper")
-        return _wrap_fallback_html(subject, str(body_html)), str(body_text)
-
-    return compiled_html, str(body_text)
+    return str(body_html), str(body_text)
 
 
 def _load_analysis_pdf_attachment(task_id: str) -> dict[str, Any]:
