@@ -622,7 +622,7 @@ def task_analyze_meeting(self, analysis_id: str, audio_translation_id: str, gene
 
             try:
                 folder_name = analysis_record.task_id or getattr(self.request, "id", None) or translation.task_id or analysis_id
-                rel_pdf_path = f"{folder_name}/analysis.pdf"
+                rel_pdf_path = f"{folder_name}/Meeting_Minutes.pdf"
                 abs_pdf_path = MEDIA_DIR / rel_pdf_path
 
                 meeting_title = getattr(analysis_record, "meeting_title", None) or None
@@ -840,7 +840,7 @@ After the translation, on a new line, also provide your confidence score (0.0 to
         # Generate PDF
         try:
             folder_name = analysis_rec.task_id or getattr(self.request, "id", None) or audio_rec.task_id or translation_id
-            rel_pdf_path = f"{folder_name}/analysis.pdf"
+            rel_pdf_path = f"{folder_name}/Meeting_Minutes.pdf"
             abs_pdf_path = MEDIA_DIR / rel_pdf_path
 
             meeting_title = getattr(analysis_rec, "meeting_title", None) or None
