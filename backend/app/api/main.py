@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from pathlib import Path
 
 from app.api.v1.routers import audios, translations, auth, utils, emails
 from app.api.v1.internal import admin
@@ -10,6 +13,12 @@ app = FastAPI(
     description="A middleware service for Automatic Speech Recognition (ASR) tasks.",
     version="1.0.0",
 )
+
+
+# Serve uploaded/generated files (audio + PDFs)
+MEDIA_DIR = Path(__file__).resolve().parents[2] / "media"
+MEDIA_DIR.mkdir(exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
 
 app.add_middleware(

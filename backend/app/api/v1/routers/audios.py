@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.api.db import get_session
@@ -142,6 +142,7 @@ async def create_meeting_analysis(
     new_analysis = MeetingAnalysis(
         audio_translation_id=analysis_data.audio_translation_id,
         task_id=analysis_data.task_id,
+        meeting_title=analysis_data.meeting_title,
         user_id=current_user.id,
         model_used="gemini-2.5-flash",
         summary="Processing...",  # Placeholder
@@ -208,6 +209,7 @@ async def get_analysis_by_id(
 @router.get("/analyses/meetings/{task_id}", response_model=MeetingAnalysisPublic)
 async def get_analysis_by_task_id(
     current_user: Annotated[User, Depends(get_current_active_user)],
+    request: Request,
     task_id: str,
     session: AsyncSession = Depends(get_session)
 ):
@@ -227,7 +229,15 @@ async def get_analysis_by_task_id(
 
     if analysis is None:
         raise HTTPException(status_code=404, detail="Meeting analysis not found")
-    return analysis
+
+    pdf_url = None
+    if getattr(analysis, "pdf_path", None):
+        # StaticFiles is mounted at /media with name="media"
+        pdf_url = str(request.url_for("media", path=analysis.pdf_path))
+
+    analysis_public = MeetingAnalysisPublic.model_validate(analysis)
+    analysis_public.pdf_url = pdf_url
+    return analysis_public
 
 
 @router.get("/{audio_id}", response_model=AudioTranscriptionPublic)

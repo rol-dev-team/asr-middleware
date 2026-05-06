@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
     && npm install -g mjml \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd -r -g appuser appuser
 

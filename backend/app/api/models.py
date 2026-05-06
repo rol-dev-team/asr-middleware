@@ -115,8 +115,10 @@ class MeetingAnalysis(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
     audio_translation_id: uuid.UUID = Field(foreign_key="audiotranslation.id")
     task_id: Optional[str] = Field(default=None, index=True, max_length=255)
+    meeting_title: Optional[str] = Field(default=None, max_length=255)
     content_text: Optional[str] = None
     user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="user.id")
+    pdf_path: Optional[str] = Field(default=None, max_length=512)
     
     # Analysis components
     summary: Optional[str] = None  # Brief summary of the meeting/content
@@ -135,12 +137,14 @@ class MeetingAnalysis(SQLModel, table=True):
 class MeetingAnalysisCreate(SQLModel):
     audio_translation_id: uuid.UUID
     task_id: Optional[str] = Field(default=None, max_length=255)
+    meeting_title: Optional[str] = Field(default=None, max_length=255)
     generate_markdown: bool = True  # Whether to generate MD notes
 
 
 class MeetingAnalysisPublic(SQLModel):
     id: uuid.UUID
     task_id: Optional[str] = Field(default=None)
+    meeting_title: Optional[str] = None
     audio_translation_id: uuid.UUID
     content_text: Optional[str]
     summary: Optional[str]
@@ -149,11 +153,14 @@ class MeetingAnalysisPublic(SQLModel):
     action_items: Optional[str]
     key_topics: Optional[str]
     notes_markdown: Optional[str]
+    pdf_path: Optional[str] = None
+    pdf_url: Optional[str] = None
     model_used: str
     created_at: datetime
 
 
 class FullPipeline(SQLModel):
+    task_id: str
     transcription_id: uuid.UUID
     translation_id: uuid.UUID
     analysis_id: uuid.UUID
