@@ -959,7 +959,7 @@ def _render_email_html(payload: dict[str, Any]) -> tuple[str, str]:
         else:
             # Plain text — escape and wrap
             text = body_text or body or ""
-            body_html = "<p>" + escape(str(text)).replace("\n", "<br/>") + "</p>"
+            body_html = escape(str(text)).replace("\n", "<br/>")
 
     if body_text is None:
         # Fallback: strip tags very roughly.
