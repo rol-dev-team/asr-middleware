@@ -28,8 +28,8 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     nodejs \
     npm \
-    && npm install -g mjml \
     fonts-dejavu-core \
+    && npm install -g mjml \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd -r -g appuser appuser
 
