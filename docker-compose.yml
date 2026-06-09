@@ -73,6 +73,15 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    
+  frontend:
+    image: ${FRONTEND_IMAGE:-sakibsibly/asr-middleware-frontend:latest}
+    container_name: asr-middleware-frontend
+    expose:
+      - "80"
+    networks:
+      - asr-network
+    restart: unless-stopped
 
   worker:
     image: ${BACKEND_IMAGE:-sakibsibly/asr-middleware:latest}
