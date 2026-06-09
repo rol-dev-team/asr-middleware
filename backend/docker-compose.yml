@@ -46,8 +46,8 @@ services:
       - SYNC_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
       - ASYNC_DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ASRMiddleware}
       - REDIS_URL=redis://redis:6379/0
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+    expose:
+      - "8000"
     volumes:
       - ./media:/app/media
     networks:
@@ -64,6 +64,22 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    
+    # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: asr-middleware-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - asr-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
   worker:
     <<: *backend_image
