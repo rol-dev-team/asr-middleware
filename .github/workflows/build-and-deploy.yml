@@ -72,16 +72,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Copy docker-compose.yml from repo root to VM
+      # Copy docker-compose.yml and nginx config from repo root to VM
       # Path on VM: ~/Projects/asr-middleware/backend/docker-compose.yml
-      - name: Copy docker-compose.yml to VM
+      - name: Copy files to VM
         uses: appleboy/scp-action@v0.1.7
         with:
           host:     ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key:      ${{ secrets.VM_SSH_KEY }}
           port:     ${{ secrets.VM_PORT || 22 }}
-          source:   "docker-compose.yml"           # project root
+          source:   "docker-compose.yml,backend/nginx"
           target:   ${{ env.APP_DIR }}
 
       - name: Deploy via SSH
