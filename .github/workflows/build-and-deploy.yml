@@ -122,7 +122,7 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key:      ${{ secrets.VM_SSH_KEY }}
           port:     ${{ secrets.VM_PORT || 22 }}
-          envs: IMAGE_NAME,APP_DIR
+          envs: IMAGE_NAME,FRONTEND_IMAGE,APP_DIR
           script: |
             set -e
             cd "$APP_DIR"
@@ -198,9 +198,8 @@ jobs:
             BACKEND_IMAGE="$BACKEND_IMAGE" docker compose up -d --no-deps --remove-orphans --force-recreate nginx
 
             # Pull and bring up frontend
-            FRONTEND_IMAGE="$FRONTEND_IMAGE:latest"
-            docker pull "$FRONTEND_IMAGE"
-            FRONTEND_IMAGE="$FRONTEND_IMAGE" docker compose up -d --no-deps --remove-orphans frontend
+            docker pull "$FRONTEND_IMAGE:latest"
+            FRONTEND_IMAGE="$FRONTEND_IMAGE:latest" docker compose up -d --no-deps --remove-orphans frontend
 
             # ── 5. Show recent logs (includes migration output) ──────
             echo "==> Last 60 lines of backend log:"
