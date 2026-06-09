@@ -59,6 +59,16 @@ services:
       retries: 3
       start_period: 40s
 
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-sakibsibly/asr-middleware-frontend:latest}
+    container_name: asr-middleware-frontend
+    expose:
+      - "80"
+    networks:
+      - asr-network
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     container_name: asr-middleware-nginx
@@ -72,15 +82,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    restart: unless-stopped
-    
-  frontend:
-    image: ${FRONTEND_IMAGE:-sakibsibly/asr-middleware-frontend:latest}
-    container_name: asr-middleware-frontend
-    expose:
-      - "80"
-    networks:
-      - asr-network
+      frontend:
+        condition: service_started
     restart: unless-stopped
 
   worker:
